@@ -1,4 +1,17 @@
-const sharp = require('sharp');
+// Lazy load sharp only when needed (for ONNX preprocessing)
+let sharp = null;
+function getSharp() {
+  if (sharp === null) {
+    try {
+      sharp = require('sharp');
+    } catch (error) {
+      console.warn('⚠️  Sharp module not available. ONNX preprocessing will not work.');
+      return null;
+    }
+  }
+  return sharp;
+}
+
 const fs = require('fs');
 const path = require('path');
 const FormData = require('form-data');
@@ -108,13 +121,19 @@ class PyTorchPredictor {
 
   async preprocessImage(imageBuffer) {
     try {
+      // Get sharp module (lazy load)
+      const sharpModule = getSharp();
+      if (!sharpModule) {
+        throw new Error('Sharp module not available. Cannot preprocess image for ONNX model.');
+      }
+      
       // Get normalization values from model info or use defaults
       const mean = this.modelInfo?.mean || [0.485, 0.456, 0.406];
       const std = this.modelInfo?.std || [0.229, 0.224, 0.225];
       const imgSize = this.modelInfo?.input_size?.[0] || 224;
       
       // Resize and normalize image for model input
-      const processed = await sharp(imageBuffer)
+      const processed = await sharpModule(imageBuffer)
         .resize(imgSize, imgSize)
         .removeAlpha()
         .raw()
