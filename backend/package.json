@@ -9,10 +9,8 @@
     "start": "node src/server.js"
   },
   "dependencies": {
-    "@google-cloud/speech": "^7.2.0",
     "@supabase/supabase-js": "^2.89.0",
     "bcryptjs": "^2.4.3",
-    "canvas": "^3.2.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^4.19.2",
@@ -23,11 +21,15 @@
     "node-cron": "^4.2.1",
     "node-fetch": "^2.7.0",
     "nodemailer": "^7.0.6",
-    "onnxruntime-node": "^1.22.0-rev",
     "sharp": "^0.34.4",
     "socket.io": "^4.8.1",
     "twilio": "^5.10.1",
     "xlsx": "^0.18.5"
+  },
+  "optionalDependencies": {
+    "@google-cloud/speech": "^7.2.0",
+    "canvas": "^3.2.0",
+    "onnxruntime-node": "^1.22.0-rev"
   },
   "devDependencies": {
     "nodemon": "^3.1.7"
