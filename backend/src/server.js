@@ -44,7 +44,17 @@ const DATA_DIR = process.env.VERCEL ? '/tmp/data' : path.join(__dirname, '..', '
 const IMAGES_DIR = process.env.VERCEL ? '/tmp/images' : path.join(DATA_DIR, 'images');
 
 // Initialize Database Service (Supabase ONLY - no JSON fallback)
-const db = new DatabaseService();
+let db;
+try {
+  db = new DatabaseService();
+  console.log('✅ DatabaseService initialized successfully');
+} catch (error) {
+  console.error('❌ Failed to initialize DatabaseService:', error.message);
+  console.error('❌ Error:', error);
+  // Don't throw here - let routes handle the error gracefully
+  // This allows the server to start even if DB connection fails initially
+  db = null;
+}
 
 // Socket.IO authentication and real-time updates
 io.use((socket, next) => {
@@ -96,6 +106,9 @@ const upload = multer({ storage: multer.memoryStorage() });
 // Data persistence functions
 // Database functions - Supabase ONLY (no JSON fallback)
 async function getUsers() { 
+  if (!db) {
+    throw new Error('Database service not initialized. Please check Supabase credentials.');
+  }
   return await db.getUsers();
 }
 
