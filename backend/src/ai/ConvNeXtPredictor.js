@@ -1,5 +1,31 @@
-const ort = require('onnxruntime-node');
-const sharp = require('sharp');
+// Lazy load modules to avoid errors if they're not installed
+let ortModule = null;
+let sharpModule = null;
+
+function getOrt() {
+  if (ortModule === null) {
+    try {
+      ortModule = require('onnxruntime-node');
+    } catch (error) {
+      console.warn('⚠️  onnxruntime-node not available');
+      return null;
+    }
+  }
+  return ortModule;
+}
+
+function getSharp() {
+  if (sharpModule === null) {
+    try {
+      sharpModule = require('sharp');
+    } catch (error) {
+      console.warn('⚠️  Sharp module not available');
+      return null;
+    }
+  }
+  return sharpModule;
+}
+
 const fs = require('fs');
 const path = require('path');
 
@@ -48,6 +74,10 @@ class ConvNeXtPredictor {
         return false;
       }
       
+      const ort = getOrt();
+      if (!ort) {
+        throw new Error('onnxruntime-node not available');
+      }
       this.session = await ort.InferenceSession.create(this.modelPath);
       console.log('ConvNeXt model loaded successfully');
       return true;
@@ -64,8 +94,14 @@ class ConvNeXtPredictor {
       const std = this.modelInfo?.std || [0.229, 0.224, 0.225];
       const imgSize = this.modelInfo?.input_size?.[0] || 224;
       
+      // Get sharp module (lazy load)
+      const sharpModule = getSharp();
+      if (!sharpModule) {
+        throw new Error('Sharp module not available. Cannot preprocess image.');
+      }
+      
       // Resize and normalize image for ConvNeXt model input
-      const processed = await sharp(imageBuffer)
+      const processed = await sharpModule(imageBuffer)
         .resize(imgSize, imgSize)
         .removeAlpha()
         .raw()
@@ -85,6 +121,10 @@ class ConvNeXtPredictor {
       }
       
       // Reshape to [1, 3, imgSize, imgSize] for RGB channels
+      const ort = getOrt();
+      if (!ort) {
+        throw new Error('onnxruntime-node not available');
+      }
       const input = new ort.Tensor('float32', pixels, [1, 3, imgSize, imgSize]);
       return input;
     } catch (error) {

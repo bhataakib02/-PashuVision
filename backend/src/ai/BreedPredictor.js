@@ -1,5 +1,31 @@
-const ort = require('onnxruntime-node');
-const sharp = require('sharp');
+// Lazy load modules to avoid errors if they're not installed
+let ortModule = null;
+let sharpModule = null;
+
+function getOrt() {
+  if (ortModule === null) {
+    try {
+      ortModule = require('onnxruntime-node');
+    } catch (error) {
+      console.warn('⚠️  onnxruntime-node not available');
+      return null;
+    }
+  }
+  return ortModule;
+}
+
+function getSharp() {
+  if (sharpModule === null) {
+    try {
+      sharpModule = require('sharp');
+    } catch (error) {
+      console.warn('⚠️  Sharp module not available');
+      return null;
+    }
+  }
+  return sharpModule;
+}
+
 const fs = require('fs');
 const path = require('path');
 
@@ -23,6 +49,10 @@ class BreedPredictor {
         return false;
       }
       
+      const ort = getOrt();
+      if (!ort) {
+        throw new Error('onnxruntime-node not available');
+      }
       this.session = await ort.InferenceSession.create(modelPath);
       console.log('AI model loaded successfully');
       return true;
@@ -34,8 +64,14 @@ class BreedPredictor {
 
   async preprocessImage(imageBuffer) {
     try {
+      // Get sharp module (lazy load)
+      const sharpModule = getSharp();
+      if (!sharpModule) {
+        throw new Error('Sharp module not available. Cannot preprocess image.');
+      }
+      
       // Resize and normalize image for model input
-      const processed = await sharp(imageBuffer)
+      const processed = await sharpModule(imageBuffer)
         .resize(224, 224)
         .removeAlpha()
         .raw()
@@ -48,6 +84,10 @@ class BreedPredictor {
       }
       
       // Reshape to [1, 3, 224, 224] for RGB channels
+      const ort = getOrt();
+      if (!ort) {
+        throw new Error('onnxruntime-node not available');
+      }
       const tensor = new ort.Tensor('float32', pixels, [1, 3, 224, 224]);
       return tensor;
     } catch (error) {
@@ -112,11 +152,18 @@ class BreedPredictor {
 
   async generateHeatmap(imageBuffer, predictions) {
     try {
+      // Get sharp module (lazy load)
+      const sharpModule = getSharp();
+      if (!sharpModule) {
+        console.warn('Sharp module not available for heatmap generation');
+        return null;
+      }
+      
       // Mock heatmap generation - in real implementation, use Grad-CAM
-      const image = await sharp(imageBuffer).resize(224, 224).toBuffer();
+      const image = await sharpModule(imageBuffer).resize(224, 224).toBuffer();
       
       // Create a simple overlay showing "AI attention" areas
-      const heatmap = await sharp(image)
+      const heatmap = await sharpModule(image)
         .composite([{
           input: Buffer.from(`
             <svg width="224" height="224">
