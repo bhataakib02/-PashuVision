@@ -11,39 +11,159 @@ You have two options:
 
 ### Option 1: Deploy to Railway (Recommended - Easy Setup)
 
-1. **Create Railway Account**
+#### Step 1: Create Railway Account and Workspace
+
+1. **Sign up for Railway**
    - Go to [railway.app](https://railway.app)
-   - Sign up with GitHub
+   - Click "Start a New Project" or "Login"
+   - Sign up using your GitHub account (recommended)
 
-2. **Create New Project**
-   - Click "New Project"
-   - Select "Deploy from GitHub repo"
-   - Select your repository
+2. **Create a Workspace** (IMPORTANT - Fixes the workspaceId error)
+   - After signing up, you'll be asked to create a workspace
+   - Click "New Workspace" or "Create Workspace"
+   - Name it (e.g., "PashuVision" or "My Projects")
+   - Select a plan (Free tier is fine to start)
+   - Click "Create Workspace"
 
-3. **Configure Service**
-   - Railway will auto-detect the Python service
-   - If not, add service manually:
-     - Root directory: `backend/models`
-     - Start command: `python pytorch_service.py`
-     - Python version: 3.9 or higher
+#### Step 2: Create New Project
 
-4. **Add Environment Variables** (if needed)
-   - `PORT`: Railway will set this automatically
-   - Add any other required variables
+1. **From the Dashboard**
+   - You should now see your workspace dashboard
+   - Click the **"New Project"** button (green button in top right)
 
-5. **Deploy**
-   - Railway will automatically deploy
-   - Copy the service URL (e.g., `https://your-service.up.railway.app`)
+2. **Connect GitHub Repository**
+   - Select **"Deploy from GitHub repo"**
+   - If this is your first time, authorize Railway to access your GitHub
+   - Search for and select your repository: `-PashuVision` (or your repo name)
+   - Click on the repository
 
-6. **Configure Vercel**
-   - Go to Vercel project settings
-   - Add environment variable:
-     - Key: `PYTORCH_SERVICE_URL`
-     - Value: Your Railway service URL (e.g., `https://your-service.up.railway.app`)
+#### Step 3: Configure the Service
 
-7. **Redeploy Vercel**
-   - Trigger a new deployment in Vercel
-   - The app will now use your external Python service
+1. **Railway will detect your repository**
+   - Railway will start analyzing your repo
+   - It may auto-detect a Python service, but we need to configure it correctly
+
+2. **Configure Service Settings**
+   - Click on the service that Railway created
+   - Go to **"Settings"** tab
+   - Configure the following:
+
+   **Root Directory:**
+   - Set to: `backend/models`
+   - This tells Railway where your Python service is located
+
+   **Start Command:**
+   - Set to: `python pytorch_service.py`
+   - Or: `python3 pytorch_service.py` (if Python 3 is required)
+
+   **Python Version:**
+   - Railway will detect this automatically
+   - If needed, ensure Python 3.9 or higher is selected
+
+3. **Install Dependencies**
+   - Railway should automatically detect `requirements.txt`
+   - If not, create a `requirements.txt` in `backend/models/` with:
+   ```
+   flask==3.0.0
+   flask-cors==4.0.0
+   torch>=2.0.0
+   torchvision>=0.15.0
+   Pillow>=10.0.0
+   timm>=0.9.0
+   ```
+
+#### Step 4: Environment Variables
+
+1. **Go to Variables Tab**
+   - Click on your service
+   - Click **"Variables"** tab
+   - Railway automatically sets `PORT` - **don't change this**
+
+2. **Add Custom Variables** (if needed)
+   - Most likely you won't need any additional variables
+   - The service will use default settings
+
+#### Step 5: Deploy and Get URL
+
+1. **Deploy**
+   - Railway will automatically start deploying
+   - Watch the build logs in the "Deployments" tab
+   - Wait for deployment to complete (usually 2-5 minutes)
+
+2. **Get Service URL**
+   - Once deployed, go to **"Settings"** tab
+   - Scroll down to **"Networking"** section
+   - Click **"Generate Domain"** if no domain exists
+   - Copy the public URL (e.g., `https://pytorch-service-production.up.railway.app`)
+   - **Important:** Save this URL - you'll need it for Vercel
+
+#### Step 6: Verify Service is Running
+
+1. **Test Health Endpoint**
+   - Open the service URL in browser
+   - Add `/health` to the end: `https://your-service.up.railway.app/health`
+   - You should see JSON response:
+   ```json
+   {
+     "status": "healthy",
+     "model_loaded": true,
+     "device": "cpu"
+   }
+   ```
+
+#### Step 7: Configure Vercel
+
+1. **Go to Vercel Dashboard**
+   - Open your Vercel project: `https://vercel.com/your-username/pashu-vision`
+   - Click on **"Settings"** tab
+   - Click on **"Environment Variables"** in the left sidebar
+
+2. **Add PYTORCH_SERVICE_URL**
+   - Click **"Add New"**
+   - **Key:** `PYTORCH_SERVICE_URL`
+   - **Value:** Your Railway service URL (from Step 5)
+     - Example: `https://pytorch-service-production.up.railway.app`
+   - **Environment:** Select "Production", "Preview", and "Development" (or just "Production")
+   - Click **"Save"**
+
+3. **Redeploy Vercel**
+   - Go to **"Deployments"** tab
+   - Click the three dots (...) on the latest deployment
+   - Click **"Redeploy"**
+   - Or make a small change and push to GitHub to trigger auto-deploy
+
+#### Step 8: Test the Integration
+
+1. **Test Prediction**
+   - Go to your Vercel app: `https://pashu-vision.vercel.app`
+   - Navigate to "New Record"
+   - Upload an image
+   - Click "AI Breed Prediction"
+   - It should now work without 503 errors!
+
+### Troubleshooting Railway Deployment
+
+**Error: "workspaceId must be specified"**
+- Solution: You must create a workspace first (see Step 1 above)
+- Go to Railway dashboard → Create Workspace → Then create project
+
+**Error: "Build failed - Module not found"**
+- Solution: Ensure `requirements.txt` exists in `backend/models/`
+- Check build logs for missing dependencies
+
+**Error: "Port already in use"**
+- Solution: Railway sets PORT automatically - don't set it manually
+- The service should use `os.environ.get('PORT', 5001)`
+
+**Service keeps restarting**
+- Check logs in Railway dashboard
+- Ensure model file exists: `backend/models/best_model_convnext_base_acc0.7007.pth`
+- Check for Python import errors in logs
+
+**Cannot access service URL**
+- Ensure you clicked "Generate Domain" in Settings → Networking
+- Check that service is in "Active" state (not crashed)
+- Wait a few minutes after deployment for DNS propagation
 
 ### Option 2: Deploy to Render
 
