@@ -1,5 +1,7 @@
-// Lazy load sharp only when needed (for ONNX preprocessing)
+// Lazy load modules only when needed
 let sharp = null;
+let ortModule = null;
+
 function getSharp() {
   if (sharp === null) {
     try {
@@ -12,10 +14,23 @@ function getSharp() {
   return sharp;
 }
 
+function getOrt() {
+  if (ortModule === null) {
+    try {
+      ortModule = require('onnxruntime-node');
+    } catch (error) {
+      console.warn('⚠️  onnxruntime-node not available');
+      return null;
+    }
+  }
+  return ortModule;
+}
+
 const fs = require('fs');
 const path = require('path');
 const FormData = require('form-data');
 const fetch = require('node-fetch');
+const crypto = require('crypto');
 
 class PyTorchPredictor {
   constructor() {
@@ -74,7 +89,10 @@ class PyTorchPredictor {
     // Check if ONNX model exists (direct Node.js inference)
     if (fs.existsSync(this.modelPath)) {
       try {
-        const ort = require('onnxruntime-node');
+        const ort = getOrt();
+        if (!ort) {
+          throw new Error('onnxruntime-node not available');
+        }
         this.session = await ort.InferenceSession.create(this.modelPath);
         console.log('✅ PyTorch model (ONNX) loaded successfully');
         this.usePythonService = false;
@@ -153,7 +171,10 @@ class PyTorchPredictor {
       }
       
       // Reshape to [1, 3, imgSize, imgSize] for RGB channels (ONNX format)
-      const ort = require('onnxruntime-node');
+      const ort = getOrt();
+      if (!ort) {
+        throw new Error('onnxruntime-node not available');
+      }
       const input = new ort.Tensor('float32', pixels, [1, 3, imgSize, imgSize]);
       return input;
     } catch (error) {
@@ -188,11 +209,11 @@ class PyTorchPredictor {
         }));
       }
       
-      // Fallback to mock predictions
-      return this.getMockPrediction();
+      // Fallback to mock predictions (deterministic based on image)
+      return this.getMockPrediction(imageBuffer);
     } catch (error) {
       console.error('Prediction failed:', error);
-      return this.getMockPrediction();
+      return this.getMockPrediction(imageBuffer);
     }
   }
 
@@ -214,10 +235,10 @@ class PyTorchPredictor {
       }
 
       const data = await response.json();
-      return data.predictions || this.getMockPrediction();
+      return data.predictions || this.getMockPrediction(imageBuffer);
     } catch (error) {
       console.error('Python service prediction failed:', error.message);
-      return this.getMockPrediction();
+      return this.getMockPrediction(imageBuffer);
     }
   }
 
@@ -271,16 +292,27 @@ class PyTorchPredictor {
     }
   }
 
-  getMockPrediction() {
+  getMockPrediction(imageBuffer = null) {
     // Use actual breeds from model info or fallback to common breeds
     const commonBreeds = this.breeds.length > 0 ? this.breeds : [
       'Gir', 'Sahiwal', 'Murrah', 'Holstein_Friesian', 'Jersey', 
       'Kankrej', 'Tharparkar', 'Red_Sindhi', 'Hariana', 'Ongole'
     ];
     
-    // Return only one breed with 100% confidence
-    const randomBreed = commonBreeds[Math.floor(Math.random() * commonBreeds.length)];
-    return [{ breed: randomBreed, confidence: 1.0 }];
+    // Make prediction deterministic based on image content
+    // Same image will always return same breed
+    let breedIndex = 0;
+    if (imageBuffer && imageBuffer.length > 0) {
+      // Create hash from image buffer to get consistent breed
+      const hash = crypto.createHash('md5').update(imageBuffer).digest('hex');
+      // Convert hash to number and use modulo to pick breed
+      const hashNum = parseInt(hash.substring(0, 8), 16);
+      breedIndex = hashNum % commonBreeds.length;
+    }
+    
+    // Return consistent breed for same image
+    const selectedBreed = commonBreeds[breedIndex];
+    return [{ breed: selectedBreed, confidence: 0.75 }]; // Lower confidence for mock
   }
 
   async isCrossbreed(predictions) {
