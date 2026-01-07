@@ -1,0 +1,165 @@
+============================================================
+BreedVision Project - Complete Startup Guide
+============================================================
+
+This file contains all commands needed to start the project.
+Run these commands in SEPARATE terminal windows!
+
+============================================================
+STEP 1: INSTALL DEPENDENCIES (First time only)
+============================================================
+
+# Backend Node.js Dependencies
+cd backend
+npm install
+
+# Python Service Dependencies
+cd models
+pip install -r requirements.txt
+cd ../..
+
+# Frontend Dependencies (if using frontend)
+cd frontend
+npm install
+cd ..
+
+============================================================
+STEP 2: START PYTHON SERVICE (Terminal 1)
+============================================================
+
+# Activate virtual environment (if using one)
+& .venv/Scripts/Activate.ps1
+
+# Navigate to models directory
+cd backend/models
+
+# Start Python PyTorch service
+python pytorch_service.py
+
+# Expected output:
+# ✅ Model loaded successfully on cpu
+# 🚀 Starting Flask server on http://localhost:5001
+# * Running on http://127.0.0.1:5001
+
+# ⚠️  KEEP THIS TERMINAL OPEN! The service must keep running.
+
+============================================================
+STEP 3: START NODE.JS BACKEND (Terminal 2 - NEW TERMINAL)
+============================================================
+
+# Activate virtual environment (if using one)
+& .venv/Scripts/Activate.ps1
+
+# Navigate to backend
+cd backend
+
+# Start Node.js backend server
+npm run dev
+
+# Expected output:
+# ✅ Using Python PyTorch service for predictions
+#    Service URL: http://localhost:5001
+# ✅ Connected to Supabase database
+# API listening on :4000
+# WebSocket server ready for real-time updates
+
+# ⚠️  KEEP THIS TERMINAL OPEN! The server must keep running.
+
+============================================================
+STEP 4: START FRONTEND (Terminal 3 - NEW TERMINAL, Optional)
+============================================================
+
+# Navigate to frontend
+cd frontend
+
+# Start frontend development server
+npm run dev
+
+# Expected output:
+# VITE vX.X.X  ready in XXX ms
+# ➜  Local:   http://localhost:5173/
+
+# ⚠️  KEEP THIS TERMINAL OPEN! The frontend must keep running.
+
+============================================================
+QUICK START (After initial setup)
+============================================================
+
+TERMINAL 1 - Python Service:
+cd backend/models
+python pytorch_service.py
+
+TERMINAL 2 - Node.js Backend:
+cd backend
+npm run dev
+
+TERMINAL 3 - Frontend (Optional):
+cd frontend
+npm run dev
+
+============================================================
+ENVIRONMENT VARIABLES REQUIRED
+============================================================
+
+Make sure you have a .env file in the backend directory with:
+- SUPABASE_URL=your_supabase_url
+- SUPABASE_SERVICE_KEY=your_service_key
+- JWT_SECRET=your_jwt_secret
+- PYTORCH_SERVICE_URL=http://localhost:5001 (optional, defaults to this)
+
+============================================================
+SERVICE URLS
+============================================================
+
+Python PyTorch Service: http://localhost:5001
+Node.js Backend API:    http://localhost:4000
+Frontend (if running):  http://localhost:5173
+
+============================================================
+TROUBLESHOOTING
+============================================================
+
+1. Port 4000 already in use:
+   - Stop any existing Node.js processes
+   - Or kill process: netstat -ano | findstr :4000
+
+2. Port 5001 already in use:
+   - Stop any existing Python processes on port 5001
+   - Or change PYTORCH_SERVICE_URL in .env
+
+3. Python service not detected:
+   - Make sure Python service is running in Terminal 1
+   - Wait a few seconds after starting Python service
+   - Check that service is on http://localhost:5001
+
+4. Module not found errors:
+   - Run: npm install (in backend directory)
+   - Run: pip install -r requirements.txt (in backend/models directory)
+
+5. Model not found:
+   - Check that best_model_final.pth exists in backend/models/
+   - The Python service will load it automatically
+
+============================================================
+STOPPING THE PROJECT
+============================================================
+
+In each terminal window, press:
+Ctrl + C
+
+Stop in this order:
+1. Frontend (Terminal 3)
+2. Node.js Backend (Terminal 2)
+3. Python Service (Terminal 1)
+
+============================================================
+NOTES
+============================================================
+
+- Always start Python service BEFORE Node.js backend
+- Keep all terminals open while project is running
+- Python service must be running for predictions to work
+- Without Python service, the system will use mock predictions
+
+============================================================
+

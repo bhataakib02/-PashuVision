@@ -1,0 +1,59 @@
+# Exclude large model files (these should be stored externally or downloaded at runtime)
+backend/models/*.onnx
+backend/models/*.pth
+backend/models/*.pt
+
+# Exclude data files (using Supabase now)
+backend/data/images/**
+backend/data/*.json
+
+# Exclude SQL migration files (not needed in production)
+backend/*.sql
+backend/*-guide.md
+backend/*-commands.md
+backend/*-required.md
+backend/*-fix.md
+backend/*-update.md
+backend/*-steps.md
+backend/*-guide.md
+backend/create-admin-user.js
+
+# Exclude development files
+backend/node_modules/.cache
+backend/.env.example
+backend/.env.local
+backend/.env.development
+
+# Exclude test files
+**/*.test.js
+**/*.spec.js
+**/__tests__/**
+**/test/**
+
+# Exclude documentation
+*.md
+!README.md
+
+# Exclude Git files
+.git
+.gitignore
+.gitattributes
+
+# Exclude IDE files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Exclude build artifacts
+frontend/dist
+frontend/.vite
+backend/dist
+
+# Exclude logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+

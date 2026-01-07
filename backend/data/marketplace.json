@@ -1,0 +1,110 @@
+[
+  {
+    "id": "feed_001",
+    "category": "feed_suppliers",
+    "subcategory": "Cattle Feed",
+    "name": "Premium Cattle Feed",
+    "provider": "Green Fields Feed Co.",
+    "description": "High-quality cattle feed with balanced nutrition",
+    "price": 25.5,
+    "unit": "per kg",
+    "location": "Punjab",
+    "rating": 4.5,
+    "reviews": 128,
+    "features": [
+      "High protein content",
+      "Mineral enriched",
+      "Digestible",
+      "Cost effective"
+    ],
+    "contact": {
+      "phone": "+91-9876543210",
+      "email": "sales@greenfields.com",
+      "address": "123 Farm Road, Ludhiana, Punjab"
+    },
+    "availability": "In Stock",
+    "delivery": "Free delivery within 50km",
+    "image": "/images/feed_cattle.jpg"
+  },
+  {
+    "id": "vet_001",
+    "category": "veterinary_services",
+    "subcategory": "Health Checkup",
+    "name": "Complete Health Checkup",
+    "provider": "Dr. Rajesh Veterinary Clinic",
+    "description": "Comprehensive health examination for cattle and buffaloes",
+    "price": 500,
+    "unit": "per visit",
+    "location": "Haryana",
+    "rating": 4.8,
+    "reviews": 89,
+    "features": [
+      "Full body examination",
+      "Blood tests",
+      "Health certificate",
+      "Follow-up care"
+    ],
+    "contact": {
+      "phone": "+91-9876543211",
+      "email": "drrajesh@vetclinic.com",
+      "address": "456 Medical Street, Karnal, Haryana"
+    },
+    "availability": "Available",
+    "delivery": "Home visit available",
+    "image": "/images/vet_checkup.jpg"
+  },
+  {
+    "id": "milk_001",
+    "category": "milk_collection",
+    "subcategory": "Daily Collection",
+    "name": "Daily Milk Collection Service",
+    "provider": "Fresh Milk Co-operative",
+    "description": "Daily milk collection from your farm",
+    "price": 45,
+    "unit": "per liter",
+    "location": "Gujarat",
+    "rating": 4.3,
+    "reviews": 156,
+    "features": [
+      "Daily collection",
+      "Fair pricing",
+      "Quality testing",
+      "Timely payment"
+    ],
+    "contact": {
+      "phone": "+91-9876543212",
+      "email": "collection@freshmilk.coop",
+      "address": "789 Co-op Road, Anand, Gujarat"
+    },
+    "availability": "Available",
+    "delivery": "Daily pickup service",
+    "image": "/images/milk_collection.jpg"
+  },
+  {
+    "id": "breeding_001",
+    "category": "breeding_services",
+    "subcategory": "AI Services",
+    "name": "Artificial Insemination Service",
+    "provider": "Advanced Breeding Center",
+    "description": "Professional AI services with high-quality semen",
+    "price": 800,
+    "unit": "per service",
+    "location": "Maharashtra",
+    "rating": 4.7,
+    "reviews": 203,
+    "features": [
+      "High-quality semen",
+      "Expert technicians",
+      "Success guarantee",
+      "Follow-up support"
+    ],
+    "contact": {
+      "phone": "+91-9876543213",
+      "email": "ai@breedingcenter.com",
+      "address": "321 Breeding Lane, Pune, Maharashtra"
+    },
+    "availability": "Available",
+    "delivery": "Service at your location",
+    "image": "/images/ai_service.jpg"
+  }
+]

@@ -1,0 +1,37 @@
+[
+  {
+    "id": "PnEQcZqXsgY369X-1A9dJ",
+    "email": "admin@gmail.com",
+    "password_hash": "$2a$10$i85MbnL2HSWB1hlbYZGWhO2YVLsbH9h/1xQMH.h5Kz.HGR2E9JUwW",
+    "name": "Admin",
+    "role": "admin",
+    "phone": "0123456789",
+    "is_active": true,
+    "permissions": [
+      "create_animal",
+      "view_own_animals",
+      "update_own_animals",
+      "all"
+    ],
+    "created_at": "2026-01-04T10:29:52.335",
+    "updated_at": "2026-01-04T11:08:46.931Z",
+    "region": "",
+    "photo_url": "/uploads/profile_PnEQcZqXsgY369X-1A9dJ_mhtBJx4BrVcSTTaP9esQj.jpg"
+  },
+  {
+    "id": "3o3P1-vNiSratQpR-cYPQ",
+    "email": "aakib@gmail.com",
+    "password_hash": "$2a$10$DkvC.uxHGknT73hrYAQ4fu5.tDkEfnblbP1ke3vwN0C13.p6sCE4a",
+    "name": "aakib",
+    "role": "user",
+    "phone": "974102563",
+    "is_active": true,
+    "permissions": [
+      "create_animal",
+      "view_own_animals",
+      "update_own_animals"
+    ],
+    "created_at": "2026-01-04T11:03:42.708",
+    "updated_at": "2026-01-04T11:03:42.708"
+  }
+]

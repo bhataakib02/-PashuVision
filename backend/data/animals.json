@@ -1,0 +1,55 @@
+[
+  {
+    "id": "8XTVmkCC7BQugxJ40xuUb",
+    "ear_tag": "789DX44",
+    "breed": "Toda",
+    "predicted_breed": "Toda",
+    "species": null,
+    "owner_name": "Reerrtt",
+    "owner_phone": null,
+    "location": "khorda7",
+    "notes": "Nothing",
+    "age_months": 185,
+    "gender": "female",
+    "images": [
+      "/uploads/8XTVmkCC7BQugxJ40xuUb_0.jpg"
+    ],
+    "image_urls": [
+      "/uploads/8XTVmkCC7BQugxJ40xuUb_0.jpg"
+    ],
+    "gps": null,
+    "health_status": null,
+    "health_records": [],
+    "scheduled_treatments": [],
+    "status": "approved",
+    "created_by": null,
+    "created_at": "2026-01-04T11:05:01.275",
+    "updated_by": "3o3P1-vNiSratQpR-cYPQ",
+    "updated_at": "2026-01-04T11:23:22.212",
+    "approved_by": null,
+    "approved_at": "2026-01-04T11:05:54.262",
+    "captured_at": "2026-01-04T11:05:01.275"
+  },
+  {
+    "id": "l-CUYvAl5r_NvFALHVqY4",
+    "created_at": "2026-01-04T11:24:15.617Z",
+    "created_by": "3o3P1-vNiSratQpR-cYPQ",
+    "status": "pending",
+    "owner_name": "7tyu",
+    "ear_tag": "78545",
+    "location": "dsfgbhg",
+    "notes": "cvbngfg",
+    "predicted_breed": "Jaffrabadi",
+    "breed": "Jaffrabadi",
+    "age_months": 122,
+    "gender": "female",
+    "image_urls": [
+      "/uploads/l-CUYvAl5r_NvFALHVqY4_0.jpg"
+    ],
+    "images": [
+      "/uploads/l-CUYvAl5r_NvFALHVqY4_0.jpg"
+    ],
+    "gps": null,
+    "captured_at": "2026-01-04T11:24:15.618Z"
+  }
+]
