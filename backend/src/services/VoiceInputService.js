@@ -1,12 +1,38 @@
-const speech = require('@google-cloud/speech');
+// Lazy load @google-cloud/speech only when needed
+let speechModule = null;
+function getSpeechModule() {
+  if (speechModule === null) {
+    try {
+      speechModule = require('@google-cloud/speech');
+    } catch (error) {
+      console.warn('⚠️  @google-cloud/speech module not available. Voice input features will be disabled.');
+      return null;
+    }
+  }
+  return speechModule;
+}
+
 const fs = require('fs');
 const path = require('path');
 
 class VoiceInputService {
   constructor() {
-    this.speechClient = new speech.SpeechClient();
+    this.speechClient = null;
     this.supportedLanguages = ['en-US', 'hi-IN', 'te-IN', 'ta-IN', 'bn-IN'];
     this.commands = this.initializeCommands();
+    // Lazy initialize speech client
+    this.initializeSpeechClient();
+  }
+
+  initializeSpeechClient() {
+    try {
+      const speech = getSpeechModule();
+      if (speech) {
+        this.speechClient = new speech.SpeechClient();
+      }
+    } catch (error) {
+      console.warn('⚠️  Failed to initialize Google Speech client:', error.message);
+    }
   }
 
   initializeCommands() {
@@ -26,6 +52,11 @@ class VoiceInputService {
 
   async processVoiceInput(audioBuffer, language = 'en-US') {
     try {
+      // Check if speech client is available
+      if (!this.speechClient) {
+        throw new Error('Google Speech client not available. Voice input requires @google-cloud/speech module.');
+      }
+
       const audio = {
         content: audioBuffer.toString('base64')
       };
