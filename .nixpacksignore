@@ -1,0 +1,7 @@
+# Tell Nixpacks to ignore Node.js files during detection
+package.json
+package-lock.json
+frontend/
+backend/src/
+api/
+
