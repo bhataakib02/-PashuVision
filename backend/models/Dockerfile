@@ -33,8 +33,8 @@ else\n\
 fi\n\
 exec python pytorch_service.py' > /app/start.sh && chmod +x /app/start.sh
 
-# Try to copy model file if it exists (won't fail if missing due to Git LFS)
-COPY backend/models/*.pth* . || echo "Model file not in Git, will download at runtime if MODEL_DOWNLOAD_URL is set"
+# Copy model file (tracked by Git LFS, should be available)
+COPY backend/models/*.pth ./
 
 # Expose port (Railway sets PORT env var automatically)
 EXPOSE ${PORT:-5001}
