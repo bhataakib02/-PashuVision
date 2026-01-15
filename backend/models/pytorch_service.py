@@ -70,6 +70,9 @@ model_load_attempts = 0
 max_model_load_attempts = 3
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+# Lock for preventing concurrent model downloads
+download_lock = threading.Lock()
+
 # Ensure service always starts even if model fails
 service_started = True
 
@@ -152,129 +155,148 @@ def load_model():
                 print(f"⚠️  Model file too small ({file_size} bytes), will re-download", flush=True)
     
     if not model_file_valid:
-        # Try to download from MODEL_DOWNLOAD_URL if set, or use default GitHub release
-        model_url = os.environ.get('MODEL_DOWNLOAD_URL')
-        
-        # Default GitHub release URL if not set
-        # Try quantized model first (smaller, faster)
-        quantized_url = os.environ.get('MODEL_DOWNLOAD_URL_QUANTIZED')
-        if quantized_url:
-            model_url = quantized_url
-            print("💡 Using quantized model URL (smaller size)", flush=True)
-        elif not model_url:
-            # Default to original model (user can override with MODEL_DOWNLOAD_URL)
-            model_url = "https://github.com/bhataakib02/-PashuVision/releases/download/v1.0/best_model_convnext_base_acc0.7007.pth"
-        
-        # Remove corrupted file if it exists
-        if os.path.exists(pth_path):
-            try:
-                os.remove(pth_path)
-                print("🗑️  Removed corrupted model file", flush=True)
-            except Exception:
-                pass
-        
-        try:
-            import urllib.request
-            print(f"📥 Downloading model from: {model_url}", flush=True)
-            
-            # Download with progress and validation
-            def download_with_validation(url, dest_path):
-                """Download file and validate it's complete"""
-                import tempfile
-                # Ensure destination directory exists
-                dest_dir = os.path.dirname(dest_path)
-                if dest_dir and not os.path.exists(dest_dir):
-                    os.makedirs(dest_dir, exist_ok=True)
+        # Use lock to prevent multiple simultaneous downloads
+        with download_lock:
+            # Double-check if file was downloaded by another thread while we waited
+            if os.path.exists(pth_path) and os.path.getsize(pth_path) > 50 * 1024 * 1024:
+                print("✅ Model file was downloaded by another thread, using it", flush=True)
+                model_file_valid = True
+            else:
+                # Try to download from MODEL_DOWNLOAD_URL if set, or use default GitHub release
+                model_url = os.environ.get('MODEL_DOWNLOAD_URL')
                 
-                # Use same directory for temp file
-                temp_path = dest_path + '.tmp'
+                # Default GitHub release URL if not set
+                # Try quantized model first (smaller, faster)
+                quantized_url = os.environ.get('MODEL_DOWNLOAD_URL_QUANTIZED')
+                if quantized_url:
+                    model_url = quantized_url
+                    print("💡 Using quantized model URL (smaller size)", flush=True)
+                elif not model_url:
+                    # Default to quantized model from v2.0 release
+                    model_url = "https://github.com/bhataakib02/-PashuVision/releases/download/v2.0/best_model_quantized.pth"
+                    print("💡 Using quantized model URL (smaller size)", flush=True)
                 
-                try:
-                    # Download to temp file first - use streaming to avoid memory issues
-                    print(f"📥 Downloading to: {temp_path}", flush=True)
-                    print(f"   This may take a few minutes for large files...", flush=True)
-                    
-                    # Stream download to avoid loading entire file into memory
-                    import urllib.request
-                    req = urllib.request.urlopen(url, timeout=300)  # 5 minute timeout
-                    
-                    # Write in chunks to avoid memory issues
-                    chunk_size = 8 * 1024 * 1024  # 8MB chunks
-                    with open(temp_path, 'wb') as f:
-                        downloaded = 0
-                        while True:
-                            chunk = req.read(chunk_size)
-                            if not chunk:
-                                break
-                            f.write(chunk)
-                            downloaded += len(chunk)
-                            # Log progress every 100MB
-                            if downloaded % (100 * 1024 * 1024) < chunk_size:
-                                print(f"   Downloaded: {downloaded / (1024*1024):.0f} MB", flush=True)
-                    
-                    req.close()
-                    
-                            # Validate file size (should be > 50MB but < 400MB for Railway free tier)
-                    file_size = os.path.getsize(temp_path)
-                    if file_size < 50 * 1024 * 1024:  # Less than 50MB
-                        raise ValueError(f"Downloaded file too small: {file_size} bytes (expected >50MB)")
-                    
-                    # CRITICAL: Check if model is too large for Railway (512MB RAM limit)
-                    # Model file + loading overhead needs to fit in 512MB
-                    max_model_size = 350 * 1024 * 1024  # 350MB max (leaves ~150MB for system/PyTorch)
-                    if file_size > max_model_size:
-                        error_msg = f"Model file too large: {file_size / (1024*1024):.1f} MB (max {max_model_size / (1024*1024):.0f} MB for Railway free tier)"
-                        print(f"❌ {error_msg}", flush=True)
-                        print("💡 PERMANENT SOLUTION:", flush=True)
-                        print("   1. Quantize model: python backend/models/quantize_model.py <model.pth>", flush=True)
-                        print("   2. Upload quantized model to GitHub releases", flush=True)
-                        print("   3. Set MODEL_DOWNLOAD_URL_QUANTIZED in Railway", flush=True)
-                        print("   4. Or upgrade Railway plan (Hobby: $5/month, 1GB RAM)", flush=True)
-                        print("", flush=True)
-                        print("   See PERMANENT_SOLUTION.md for detailed instructions", flush=True)
-                        # Remove the oversized file
-                        try:
-                            os.remove(temp_path)
-                        except:
-                            pass
-                        raise ValueError(error_msg)
-                    
-                    # Validate it's a valid file (check for ZIP/PyTorch magic bytes)
-                    with open(temp_path, 'rb') as f:
-                        header = f.read(4)
-                        if header[:2] != b'PK' and header != b'\x80\x02\x00\x00':
-                            # Not a ZIP or PyTorch file, might be HTML error page
-                            if header[:4] == b'<htm' or header[:4] == b'<!DO':
-                                raise ValueError("Downloaded file appears to be HTML (404/error page), not a model file")
-                    
-                    # Move temp file to final location
-                    # Ensure destination directory exists before move
+                # Remove corrupted file if it exists
+                if os.path.exists(pth_path):
+                    try:
+                        os.remove(pth_path)
+                        print("🗑️  Removed corrupted model file", flush=True)
+                    except Exception:
+                        pass
+                
+                # Download with progress and validation
+                def download_with_validation(url, dest_path):
+                    """Download file and validate it's complete"""
+                    import tempfile
+                    # Ensure destination directory exists
                     dest_dir = os.path.dirname(dest_path)
                     if dest_dir and not os.path.exists(dest_dir):
                         os.makedirs(dest_dir, exist_ok=True)
-                        print(f"📁 Created destination directory: {dest_dir}", flush=True)
                     
-                    if os.path.exists(dest_path):
-                        os.remove(dest_path)
+                    # Use same directory for temp file
+                    temp_path = dest_path + '.tmp'
                     
-                    # Use shutil.move for better cross-platform support and cross-filesystem moves
-                    import shutil
-                    shutil.move(temp_path, dest_path)
-                    print(f"✅ Moved model file to: {dest_path}", flush=True)
-                    
-                    print(f"✅ Model downloaded successfully ({file_size / (1024*1024):.1f} MB)", flush=True)
-                    return True
-                except Exception as e:
-                    # Clean up temp file on error
-                    if os.path.exists(temp_path):
+                    try:
+                        # Download to temp file first - use streaming to avoid memory issues
+                        print(f"📥 Downloading to: {temp_path}", flush=True)
+                        print(f"   This may take a few minutes for large files...", flush=True)
+                        
+                        # Stream download to avoid loading entire file into memory
+                        import urllib.request
+                        req = urllib.request.urlopen(url, timeout=300)  # 5 minute timeout
+                        
+                        # Write in chunks to avoid memory issues
+                        chunk_size = 8 * 1024 * 1024  # 8MB chunks
+                        with open(temp_path, 'wb') as f:
+                            downloaded = 0
+                            while True:
+                                chunk = req.read(chunk_size)
+                                if not chunk:
+                                    break
+                                f.write(chunk)
+                                downloaded += len(chunk)
+                                # Log progress every 100MB
+                                if downloaded % (100 * 1024 * 1024) < chunk_size:
+                                    print(f"   Downloaded: {downloaded / (1024*1024):.0f} MB", flush=True)
+                        
+                        req.close()
+                        
+                        # Validate file size (should be > 50MB but < 400MB for Railway free tier)
+                        file_size = os.path.getsize(temp_path)
+                        if file_size < 50 * 1024 * 1024:  # Less than 50MB
+                            raise ValueError(f"Downloaded file too small: {file_size} bytes (expected >50MB)")
+                        
+                        # CRITICAL: Check if model is too large for Railway (512MB RAM limit)
+                        # Model file + loading overhead needs to fit in 512MB
+                        max_model_size = 350 * 1024 * 1024  # 350MB max (leaves ~150MB for system/PyTorch)
+                        if file_size > max_model_size:
+                            error_msg = f"Model file too large: {file_size / (1024*1024):.1f} MB (max {max_model_size / (1024*1024):.0f} MB for Railway free tier)"
+                            print(f"❌ {error_msg}", flush=True)
+                            print("💡 PERMANENT SOLUTION:", flush=True)
+                            print("   1. Quantize model: python backend/models/quantize_model.py <model.pth>", flush=True)
+                            print("   2. Upload quantized model to GitHub releases", flush=True)
+                            print("   3. Set MODEL_DOWNLOAD_URL_QUANTIZED in Railway", flush=True)
+                            print("   4. Or upgrade Railway plan (Hobby: $5/month, 1GB RAM)", flush=True)
+                            print("", flush=True)
+                            print("   See PERMANENT_SOLUTION.md for detailed instructions", flush=True)
+                            # Remove the oversized file
+                            try:
+                                os.remove(temp_path)
+                            except:
+                                pass
+                            raise ValueError(error_msg)
+                        
+                        # Validate it's a valid file (check for ZIP/PyTorch magic bytes)
+                        with open(temp_path, 'rb') as f:
+                            header = f.read(4)
+                            if header[:2] != b'PK' and header != b'\x80\x02\x00\x00':
+                                # Not a ZIP or PyTorch file, might be HTML error page
+                                if header[:4] == b'<htm' or header[:4] == b'<!DO':
+                                    raise ValueError("Downloaded file appears to be HTML (404/error page), not a model file")
+                        
+                        # Move temp file to final location
+                        # Ensure destination directory exists before move
+                        dest_dir = os.path.dirname(dest_path)
+                        if dest_dir and not os.path.exists(dest_dir):
+                            os.makedirs(dest_dir, exist_ok=True)
+                            print(f"📁 Created destination directory: {dest_dir}", flush=True)
+                        
+                        if os.path.exists(dest_path):
+                            os.remove(dest_path)
+                        
+                        # Use shutil.move for better cross-platform support and cross-filesystem moves
+                        import shutil
+                        shutil.move(temp_path, dest_path)
+                        print(f"✅ Moved model file to: {dest_path}", flush=True)
+                        
+                        # Verify file exists and is readable after move
+                        if not os.path.exists(dest_path):
+                            raise ValueError(f"File move failed - destination file does not exist: {dest_path}")
+                        
+                        # Wait a moment for filesystem to sync
+                        time.sleep(0.5)
+                        
+                        # Verify file is readable
                         try:
-                            os.remove(temp_path)
-                        except:
-                            pass
-                    raise e
-            
-            download_with_validation(model_url, pth_path)
-            
+                            with open(dest_path, 'rb') as f:
+                                f.read(1)  # Try to read first byte
+                        except Exception as e:
+                            raise ValueError(f"File exists but is not readable: {e}")
+                        
+                        print(f"✅ Model downloaded successfully ({file_size / (1024*1024):.1f} MB)", flush=True)
+                        return True
+                    except Exception as e:
+                        # Clean up temp file on error
+                        if os.path.exists(temp_path):
+                            try:
+                                os.remove(temp_path)
+                            except:
+                                pass
+                        raise e
+                
+                # Call download function
+                download_with_validation(model_url, pth_path)
+                
         except Exception as e:
             print(f"❌ Failed to download model: {e}", flush=True)
             # Remove partial download if exists
@@ -284,6 +306,22 @@ def load_model():
                 except:
                     pass
             return False
+    
+    # Final check: ensure file exists and is readable before loading
+    if not os.path.exists(pth_path):
+        print(f"❌ Model file not found after download: {pth_path}", flush=True)
+        return False
+    
+    # Wait a moment for filesystem to fully sync (especially important after download)
+    time.sleep(0.5)
+    
+    # Verify file is readable
+    try:
+        with open(pth_path, 'rb') as f:
+            f.read(1)  # Try to read first byte
+    except Exception as e:
+        print(f"❌ Model file exists but is not readable: {e}", flush=True)
+        return False
     
     # Load model info - declare local variable first, then assign to global
     local_model_info = None
