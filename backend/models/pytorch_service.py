@@ -184,14 +184,52 @@ def load_model():
                 temp_path = dest_path + '.tmp'
                 
                 try:
-                    # Download to temp file first
+                    # Download to temp file first - use streaming to avoid memory issues
                     print(f"📥 Downloading to: {temp_path}", flush=True)
-                    urllib.request.urlretrieve(url, temp_path)
+                    print(f"   This may take a few minutes for large files...", flush=True)
                     
-                    # Validate file size (should be > 50MB)
+                    # Stream download to avoid loading entire file into memory
+                    import urllib.request
+                    req = urllib.request.urlopen(url, timeout=300)  # 5 minute timeout
+                    
+                    # Write in chunks to avoid memory issues
+                    chunk_size = 8 * 1024 * 1024  # 8MB chunks
+                    with open(temp_path, 'wb') as f:
+                        downloaded = 0
+                        while True:
+                            chunk = req.read(chunk_size)
+                            if not chunk:
+                                break
+                            f.write(chunk)
+                            downloaded += len(chunk)
+                            # Log progress every 100MB
+                            if downloaded % (100 * 1024 * 1024) < chunk_size:
+                                print(f"   Downloaded: {downloaded / (1024*1024):.0f} MB", flush=True)
+                    
+                    req.close()
+                    
+                            # Validate file size (should be > 50MB but < 400MB for Railway free tier)
                     file_size = os.path.getsize(temp_path)
                     if file_size < 50 * 1024 * 1024:  # Less than 50MB
                         raise ValueError(f"Downloaded file too small: {file_size} bytes (expected >50MB)")
+                    
+                    # CRITICAL: Check if model is too large for Railway (512MB RAM limit)
+                    # Model file + loading overhead needs to fit in 512MB
+                    max_model_size = 350 * 1024 * 1024  # 350MB max (leaves ~150MB for system/PyTorch)
+                    if file_size > max_model_size:
+                        error_msg = f"Model file too large: {file_size / (1024*1024):.1f} MB (max {max_model_size / (1024*1024):.0f} MB for Railway free tier)"
+                        print(f"❌ {error_msg}", flush=True)
+                        print("💡 Solutions:", flush=True)
+                        print("   1. Use a quantized/smaller model (<350MB)", flush=True)
+                        print("   2. Upgrade Railway plan (Hobby: $5/month, 1GB RAM)", flush=True)
+                        print("   3. Use model quantization: torch.quantization.quantize_dynamic()", flush=True)
+                        print("   4. Contact support for a smaller model file", flush=True)
+                        # Remove the oversized file
+                        try:
+                            os.remove(temp_path)
+                        except:
+                            pass
+                        raise ValueError(error_msg)
                     
                     # Validate it's a valid file (check for ZIP/PyTorch magic bytes)
                     with open(temp_path, 'rb') as f:
@@ -281,9 +319,34 @@ def load_model():
                 print(f"❌ Model file too small: {file_size} bytes (corrupted?)", flush=True)
                 return False
             
+            # CRITICAL: Check memory before loading large model
+            max_model_size = 400 * 1024 * 1024  # 400MB max
+            if file_size > max_model_size:
+                print(f"❌ Model file too large: {file_size / (1024*1024):.1f} MB (max {max_model_size / (1024*1024):.0f} MB)", flush=True)
+                print("   This will cause Out of Memory errors on Railway free tier", flush=True)
+                return False
+            
+            # Check available memory if possible
+            try:
+                import psutil
+                mem = psutil.virtual_memory()
+                available_mb = mem.available / (1024 * 1024)
+                # Need at least 2x model size in available memory
+                required_mb = (file_size * 2) / (1024 * 1024)
+                if available_mb < required_mb:
+                    print(f"⚠️  Low memory: {available_mb:.0f} MB available, need ~{required_mb:.0f} MB", flush=True)
+                    print("   Model loading may fail due to insufficient memory", flush=True)
+            except ImportError:
+                pass  # psutil not available
+            
             # Load checkpoint - use CPU map_location to avoid GPU memory issues
             # This ensures we use CPU even if CUDA is detected (Railway uses CPU)
             print(f"📦 Loading checkpoint ({file_size / (1024*1024):.1f} MB)...", flush=True)
+            print("   This may take 30-60 seconds...", flush=True)
+            
+            # Force garbage collection before loading
+            gc.collect()
+            
             checkpoint = torch.load(pth_path, map_location='cpu')
             print("✅ Checkpoint loaded successfully", flush=True)
         except Exception as e:
