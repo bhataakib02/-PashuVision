@@ -337,10 +337,16 @@ class PyTorchPredictor {
         if (response.status === 503) {
           try {
             const errorData = JSON.parse(errorText);
+            // Check for model loading or download failure - both should retry
             const isModelLoading = errorData.status === 'loading' || 
                                  errorData.model_loading || 
                                  errorData.status === 'not_loaded' || 
-                                 errorData.error === 'Model not loaded';
+                                 errorData.error === 'Model not loaded' ||
+                                 (errorData.status === 'error' && errorData.message && (
+                                   errorData.message.includes('download failed') || 
+                                   errorData.message.includes('not found') ||
+                                   errorData.message.includes('Model file not found')
+                                 ));
             
             if (isModelLoading && retryCount < maxRetries) {
               // Calculate wait time with exponential backoff (capped)

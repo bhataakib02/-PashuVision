@@ -93,10 +93,27 @@ def load_model():
     """Load the PyTorch model"""
     global model, model_info
     
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    # Ensure script_dir exists (should always be the case, but safety check)
+    # Get script directory - handle both cases: running from backend/models or from root
+    script_file = os.path.abspath(__file__)
+    script_dir = os.path.dirname(script_file)
+    
+    # If script_dir doesn't exist or is wrong, try current working directory
+    if not os.path.exists(script_dir):
+        # Fallback to current working directory
+        script_dir = os.getcwd()
+        # If we're in /app, try /app/backend/models
+        if script_dir == '/app' and os.path.exists('/app/backend/models'):
+            script_dir = '/app/backend/models'
+        # If we're in root, try backend/models
+        elif os.path.exists(os.path.join(script_dir, 'backend', 'models')):
+            script_dir = os.path.join(script_dir, 'backend', 'models')
+    
+    # Ensure script_dir exists
     if not os.path.exists(script_dir):
         os.makedirs(script_dir, exist_ok=True)
+        print(f"📁 Created directory: {script_dir}", flush=True)
+    
+    print(f"📁 Using model directory: {script_dir}", flush=True)
     
     pth_path = os.path.join(script_dir, 'best_model_convnext_base_acc0.7007.pth')
     model_info_path = os.path.join(script_dir, 'model_info.json')
@@ -185,9 +202,19 @@ def load_model():
                                 raise ValueError("Downloaded file appears to be HTML (404/error page), not a model file")
                     
                     # Move temp file to final location
+                    # Ensure destination directory exists before move
+                    dest_dir = os.path.dirname(dest_path)
+                    if dest_dir and not os.path.exists(dest_dir):
+                        os.makedirs(dest_dir, exist_ok=True)
+                        print(f"📁 Created destination directory: {dest_dir}", flush=True)
+                    
                     if os.path.exists(dest_path):
                         os.remove(dest_path)
-                    os.rename(temp_path, dest_path)
+                    
+                    # Use shutil.move for better cross-platform support and cross-filesystem moves
+                    import shutil
+                    shutil.move(temp_path, dest_path)
+                    print(f"✅ Moved model file to: {dest_path}", flush=True)
                     
                     print(f"✅ Model downloaded successfully ({file_size / (1024*1024):.1f} MB)", flush=True)
                     return True
