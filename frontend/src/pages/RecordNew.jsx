@@ -274,13 +274,20 @@ export default function RecordNew() {
       // Add image quality info for better prediction
       fd.append('imageQuality', JSON.stringify(imageQuality))
       
+      // Add timeout to prevent hanging (120 seconds to account for model loading)
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 120000) // 120 seconds
+      
       const res = await fetch('/api/predict', { 
         method: 'POST', 
         body: fd,
         headers: {
           'Authorization': `Bearer ${token}`
-        }
+        },
+        signal: controller.signal
       })
+      
+      clearTimeout(timeoutId)
       
       let data
       if (!res.ok) {
@@ -350,6 +357,11 @@ export default function RecordNew() {
       // Display the actual error message from the backend (includes details about model service)
       // Handle newlines in error messages (from deployment instructions)
       let errorMsg = err.message || 'Failed to predict breed. Please ensure the AI model service is running.'
+      
+      // Handle timeout/abort errors
+      if (err.name === 'AbortError' || err.message.includes('timeout') || err.message.includes('aborted')) {
+        errorMsg = 'Request timed out. The AI model may still be loading. Please wait 30-60 seconds and try again.'
+      }
       
       // Handle network errors
       if (err.name === 'TypeError' && err.message.includes('fetch')) {
@@ -620,8 +632,16 @@ export default function RecordNew() {
               <div className="card" style={{ marginTop: 16, backgroundColor: '#e3f2fd', textAlign: 'center' }}>
                 <div style={{ fontSize: '48px', marginBottom: 16 }}>AI</div>
                 <h4>AI Analyzing Image...</h4>
-                <p style={{ color: 'var(--color-text-muted)', marginBottom: 16 }}>
+                <p style={{ color: 'var(--color-text-muted)', marginBottom: 8 }}>
                   Please wait while our AI analyzes the animal image
+                </p>
+                <p style={{ 
+                  color: '#ff9800', 
+                  fontSize: '0.9rem', 
+                  marginBottom: 16,
+                  fontWeight: '500'
+                }}>
+                  ⏳ First request may take 30-90 seconds (model loading)
                 </p>
                 <div style={{
                   width: '100%',
