@@ -49,22 +49,35 @@ def load_model():
         print(f"   Current working directory: {os.getcwd()}")
         print(f"   Script directory: {script_dir}")
         
-        # Try to download from MODEL_DOWNLOAD_URL if set
+        # Try to download from MODEL_DOWNLOAD_URL if set, or use default GitHub release
         model_url = os.environ.get('MODEL_DOWNLOAD_URL')
-        if model_url:
-            print(f"   Attempting to download model from: {model_url}")
-            try:
-                import urllib.request
-                print("   Downloading model file...")
-                urllib.request.urlretrieve(model_url, pth_path)
-                file_size = os.path.getsize(pth_path)
-                print(f"✅ Model downloaded successfully: {pth_path} ({file_size} bytes)")
-            except Exception as e:
-                print(f"❌ Failed to download model: {e}")
-                return False
-        else:
-            print("❌ Error: Model file not found and MODEL_DOWNLOAD_URL not set")
-            print("   Please set MODEL_DOWNLOAD_URL environment variable in Railway")
+        
+        # Default GitHub release URL if not set
+        if not model_url:
+            model_url = "https://github.com/bhataakib02/-PashuVision/releases/download/v1.0/best_model_convnext_base_acc0.7007.pth"
+            print("   MODEL_DOWNLOAD_URL not set, using default GitHub release")
+        
+        print(f"   Attempting to download model from: {model_url}")
+        try:
+            import urllib.request
+            import sys
+            
+            # Show download progress for large files
+            def show_progress(block_num, block_size, total_size):
+                downloaded = block_num * block_size
+                percent = min(100, (downloaded * 100) // total_size) if total_size > 0 else 0
+                sys.stdout.write(f"\r   Downloading: {percent}% ({downloaded // 1024 // 1024}MB / {total_size // 1024 // 1024}MB)")
+                sys.stdout.flush()
+            
+            print("   Downloading model file (this may take a few minutes)...")
+            urllib.request.urlretrieve(model_url, pth_path, show_progress)
+            print()  # New line after progress
+            file_size = os.path.getsize(pth_path)
+            print(f"✅ Model downloaded successfully: {pth_path} ({file_size / 1024 / 1024:.2f} MB)")
+        except Exception as e:
+            print(f"\n❌ Failed to download model: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     else:
         file_size = os.path.getsize(pth_path)
