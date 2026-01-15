@@ -3,6 +3,24 @@ Python microservice to run PyTorch .pth model predictions
 This service loads the new ConvNeXt model and provides predictions via HTTP API
 """
 
+import os
+import sys
+
+# Check NumPy version BEFORE importing torch to catch compatibility issues early
+try:
+    import numpy as np
+    numpy_version = np.__version__
+    major_version = int(numpy_version.split('.')[0])
+    if major_version >= 2:
+        print(f"❌ ERROR: NumPy {numpy_version} is incompatible with PyTorch 2.1.0")
+        print("   PyTorch 2.1.0 requires NumPy <2.0")
+        print("   Please ensure numpy<2.0 is installed")
+        sys.exit(1)
+    else:
+        print(f"✅ NumPy version {numpy_version} is compatible")
+except ImportError:
+    print("⚠️  NumPy not found, will be installed by PyTorch")
+
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import torch
@@ -11,8 +29,6 @@ import torchvision.transforms as transforms
 from PIL import Image
 import io
 import json
-import os
-import sys
 import threading
 
 app = Flask(__name__)
