@@ -420,23 +420,45 @@ def load_model():
                 if num_classes != inferred_classes:
                     num_classes = inferred_classes
                     local_model_info['num_classes'] = num_classes
+            
+            # Auto-detect model architecture from checkpoint dimensions
+            architecture = 'convnext_tiny'  # default
+            if 'stem.0.weight' in state_dict:
+                stem_dim = state_dict['stem.0.weight'].shape[0]
+                if stem_dim == 128:
+                    architecture = 'convnext_base'
+                    print(f"🔍 Detected ConvNeXt Base architecture from checkpoint (stem dim: {stem_dim})", flush=True)
+                elif stem_dim == 96:
+                    architecture = 'convnext_tiny'
+                    print(f"🔍 Detected ConvNeXt Tiny architecture from checkpoint (stem dim: {stem_dim})", flush=True)
+                elif stem_dim == 192:
+                    architecture = 'convnext_large'
+                    print(f"🔍 Detected ConvNeXt Large architecture from checkpoint (stem dim: {stem_dim})", flush=True)
+                else:
+                    print(f"⚠️  Unknown architecture (stem dim: {stem_dim}), defaulting to convnext_base", flush=True)
+                    architecture = 'convnext_base'
+        else:
+            architecture = 'convnext_base'  # Default to base if no state dict
         
-        # MEMORY OPTIMIZATION: Always use ConvNeXt Tiny instead of Base to reduce memory usage
-        # ConvNeXt Base uses ~2-3x more memory than Tiny
-        print("💾 Creating ConvNeXt Tiny model (memory optimized)...", flush=True)
+        # Create model with detected architecture
+        print(f"💾 Creating {architecture} model with {num_classes} classes...", flush=True)
         
         # Force garbage collection before creating model
         gc.collect()
         
         try:
             import timm
-            # Force Tiny model - much smaller memory footprint (~100MB vs ~300MB)
-            model = timm.create_model('convnext_tiny', pretrained=False, num_classes=num_classes)
-            print("✅ Model architecture created", flush=True)
+            model = timm.create_model(architecture, pretrained=False, num_classes=num_classes)
+            print(f"✅ {architecture} model architecture created", flush=True)
         except Exception as e:
-            print(f"⚠️  Error creating model with timm: {e}, using fallback", flush=True)
-            # Fallback to manual creation
-            model = create_convnext_tiny(num_classes)
+            print(f"⚠️  Error creating {architecture} model with timm: {e}, trying convnext_base as fallback", flush=True)
+            # Fallback to base model
+            try:
+                model = timm.create_model('convnext_base', pretrained=False, num_classes=num_classes)
+                print("✅ ConvNeXt Base model created (fallback)", flush=True)
+            except Exception as e2:
+                print(f"❌ Fallback also failed: {e2}, using Tiny", flush=True)
+                model = create_convnext_tiny(num_classes)
         
         # MEMORY OPTIMIZATION: Clear checkpoint from memory before loading weights
         # Extract only what we need and clear the rest
