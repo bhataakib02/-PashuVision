@@ -6,20 +6,25 @@ This service loads the new ConvNeXt model and provides predictions via HTTP API
 import os
 import sys
 
+# Disable verbose logging to prevent Railway rate limiting
+VERBOSE_LOGGING = os.environ.get('VERBOSE_LOGGING', 'false').lower() == 'true'
+
+def log(message, flush=False):
+    """Conditional logging - only log if verbose mode is enabled"""
+    if VERBOSE_LOGGING:
+        print(message, flush=flush)
+
 # Check NumPy version BEFORE importing torch to catch compatibility issues early
 try:
     import numpy as np
     numpy_version = np.__version__
     major_version = int(numpy_version.split('.')[0])
     if major_version >= 2:
-        print(f"❌ ERROR: NumPy {numpy_version} is incompatible with PyTorch 2.1.0")
-        print("   PyTorch 2.1.0 requires NumPy <2.0")
-        print("   Please ensure numpy<2.0 is installed")
+        print(f"❌ ERROR: NumPy {numpy_version} is incompatible with PyTorch 2.1.0", flush=True)
+        print("   PyTorch 2.1.0 requires NumPy <2.0", flush=True)
         sys.exit(1)
-    else:
-        print(f"✅ NumPy version {numpy_version} is compatible")
 except ImportError:
-    print("⚠️  NumPy not found, will be installed by PyTorch")
+    pass  # NumPy will be installed by PyTorch
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -75,33 +80,13 @@ def load_model():
         if not model_url:
             model_url = "https://github.com/bhataakib02/-PashuVision/releases/download/v1.0/best_model_convnext_base_acc0.7007.pth"
         
-        print(f"   Downloading model from GitHub release...", flush=True)
         try:
             import urllib.request
-            import sys
-            
-            # Show download progress (less frequent updates)
-            last_percent = -1
-            def show_progress(block_num, block_size, total_size):
-                nonlocal last_percent
-                downloaded = block_num * block_size
-                percent = min(100, (downloaded * 100) // total_size) if total_size > 0 else 0
-                # Only update every 5% to reduce log spam
-                if percent >= last_percent + 5 or percent == 100:
-                    sys.stdout.write(f"\r   Downloading: {percent}% ({downloaded // 1024 // 1024}MB / {total_size // 1024 // 1024}MB)")
-                    sys.stdout.flush()
-                    last_percent = percent
-            
-            urllib.request.urlretrieve(model_url, pth_path, show_progress)
-            print()  # New line after progress
-            file_size = os.path.getsize(pth_path)
-            print(f"✅ Model downloaded: {file_size / 1024 / 1024:.1f} MB", flush=True)
+            # Download silently - no progress updates to avoid log spam
+            urllib.request.urlretrieve(model_url, pth_path)
         except Exception as e:
             print(f"❌ Failed to download model: {e}", flush=True)
             return False
-    else:
-        file_size = os.path.getsize(pth_path)
-        print(f"✅ Model found: {file_size / 1024 / 1024:.1f} MB", flush=True)
     
     # Load model info - declare local variable first, then assign to global
     local_model_info = None
@@ -202,11 +187,10 @@ def load_model():
         # Now assign to global variable
         model_info = local_model_info
         
-        print(f"✅ Model loaded on {device}", flush=True)
         return True
         
     except Exception as e:
-        print(f"❌ Error loading model: {e}", flush=True)
+        print(f"❌ Model load error: {e}", flush=True)
         return False
 
 def preprocess_image(image_bytes):
@@ -386,22 +370,11 @@ def load_model_background():
     model_load_error = None
     
     try:
-        print("🔄 Starting background model loading...", flush=True)
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        
         model_loaded = load_model()
-        if model_loaded:
-            print("✅ Model loaded successfully in background", flush=True)
-        else:
+        if not model_loaded:
             model_load_error = "Model file not found or download failed"
-            print(f"⚠️  {model_load_error}", flush=True)
     except Exception as e:
         model_load_error = str(e)
-        print(f"❌ Error loading model in background: {e}", flush=True)
-        # Only print traceback for actual errors, not warnings
-        if "not found" not in str(e).lower():
-            import traceback
-            traceback.print_exc()
     finally:
         model_loading = False
 
@@ -411,19 +384,15 @@ if __name__ == '__main__':
     sys.stderr.reconfigure(line_buffering=True) if hasattr(sys.stderr, 'reconfigure') else None
     
     try:
-        print("🚀 Starting PyTorch Prediction Service...", flush=True)
-        print(f"   Device: {device}", flush=True)
-        
         # Start model loading in background thread
         try:
             model_thread = threading.Thread(target=load_model_background, daemon=True)
             model_thread.start()
-        except Exception as e:
-            print(f"   ⚠️  Could not start model loading thread: {e}", flush=True)
+        except Exception:
+            pass  # Silently fail - service will still start
         
         # Start Flask server immediately (don't wait for model)
         port = int(os.environ.get('PORT', 5001))
-        print(f"✅ Flask server starting on port {port}", flush=True)
         
         # Ensure Flask uses the correct host and port
         # Use threaded=True for better concurrency
