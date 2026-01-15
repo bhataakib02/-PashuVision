@@ -2,6 +2,8 @@
 
 **AI-Powered Breed Recognition and Livestock Management Platform**
 
+🌐 **Live Application**: [https://pashu-vision.vercel.app/](https://pashu-vision.vercel.app/)
+
 PashuVision is a comprehensive livestock management system that uses advanced AI/ML models to identify cattle and buffalo breeds from images. Built with React and Node.js, it provides an intuitive interface for managing animal records, breed databases, and user administration.
 
 ## ✨ Features
