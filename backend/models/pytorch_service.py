@@ -43,9 +43,32 @@ def load_model():
     pth_path = os.path.join(script_dir, 'best_model_convnext_base_acc0.7007.pth')
     model_info_path = os.path.join(script_dir, 'model_info.json')
     
+    print(f"   Looking for model at: {pth_path}")
     if not os.path.exists(pth_path):
-        print(f"❌ Error: {pth_path} not found!")
-        return False
+        print(f"⚠️  Model file not found: {pth_path}")
+        print(f"   Current working directory: {os.getcwd()}")
+        print(f"   Script directory: {script_dir}")
+        
+        # Try to download from MODEL_DOWNLOAD_URL if set
+        model_url = os.environ.get('MODEL_DOWNLOAD_URL')
+        if model_url:
+            print(f"   Attempting to download model from: {model_url}")
+            try:
+                import urllib.request
+                print("   Downloading model file...")
+                urllib.request.urlretrieve(model_url, pth_path)
+                file_size = os.path.getsize(pth_path)
+                print(f"✅ Model downloaded successfully: {pth_path} ({file_size} bytes)")
+            except Exception as e:
+                print(f"❌ Failed to download model: {e}")
+                return False
+        else:
+            print("❌ Error: Model file not found and MODEL_DOWNLOAD_URL not set")
+            print("   Please set MODEL_DOWNLOAD_URL environment variable in Railway")
+            return False
+    else:
+        file_size = os.path.getsize(pth_path)
+        print(f"✅ Model file found: {pth_path} ({file_size} bytes)")
     
     # Load model info - declare local variable first, then assign to global
     local_model_info = None
@@ -299,12 +322,29 @@ def detect_species():
 if __name__ == '__main__':
     print("🚀 Starting PyTorch Prediction Service...")
     print(f"   Device: {device}")
+    print(f"   Working directory: {os.getcwd()}")
+    print(f"   Script location: {os.path.abspath(__file__)}")
     
-    if load_model():
-        port = int(os.environ.get('PORT', 5001))
-        print(f"✅ Starting server on port {port}")
-        app.run(host='0.0.0.0', port=port, debug=False)
-    else:
-        print("❌ Failed to load model. Exiting.")
-        sys.exit(1)
+    # List directory contents for debugging
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    print(f"   Script directory: {script_dir}")
+    print(f"   Contents of {script_dir}:")
+    try:
+        for item in os.listdir(script_dir):
+            item_path = os.path.join(script_dir, item)
+            size = os.path.getsize(item_path) if os.path.isfile(item_path) else 0
+            print(f"      - {item} ({size} bytes)" if os.path.isfile(item_path) else f"      - {item}/")
+    except Exception as e:
+        print(f"      Error listing directory: {e}")
+    
+    # Try to load model, but start server anyway
+    model_loaded = load_model()
+    if not model_loaded:
+        print("⚠️  Warning: Model not loaded. Service will start but /predict will fail.")
+        print("   Health endpoint will still work.")
+    
+    port = int(os.environ.get('PORT', 5001))
+    print(f"✅ Starting server on port {port}")
+    print(f"   Health check available at: http://0.0.0.0:{port}/health")
+    app.run(host='0.0.0.0', port=port, debug=False)
 
