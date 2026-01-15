@@ -616,7 +616,24 @@ app.get('/api/me', authMiddleware, async (req, res) => {
     }
     
     // Get photo URL - prefer base64 if available (for Vercel), otherwise use URL
-    const photoUrl = user.photo_base64 || user.photo_url || user.photoUrl || user.profile_photo || null;
+    // Check if photo_url is already a base64 data URL
+    let photoUrl = user.photo_base64 || user.photo_url || user.photoUrl || user.profile_photo || null;
+    const photoBase64 = user.photo_base64 || (photoUrl?.startsWith('data:') ? photoUrl : null) || null;
+    
+    // PERMANENT FIX: On Vercel, file paths don't work - filter them out
+    // If photo_url is a file path (not base64) and we're on Vercel, return null
+    // This forces users to upload new photos which will be saved as base64
+    if (photoUrl && !photoUrl.startsWith('data:') && photoUrl.startsWith('/uploads/')) {
+      if (process.env.VERCEL) {
+        console.warn('⚠️  Filtering out invalid file-based photo_url on Vercel:', photoUrl);
+        console.warn('💡 User should upload a new photo which will be saved as base64');
+        photoUrl = null; // Return null so user sees placeholder and can upload new photo
+      } else {
+        console.warn('⚠️  User has file-based photo_url that may not work on Vercel:', photoUrl);
+      }
+    }
+    
+    console.log('📥 Returning profile photoUrl:', photoUrl ? (photoUrl.startsWith('data:') ? 'base64 data URL' : photoUrl) : 'none');
     
     res.json({
       id: user.id,
@@ -627,7 +644,7 @@ app.get('/api/me', authMiddleware, async (req, res) => {
       region: user.region || user.location || '',
       language: user.language || 'en',
       photoUrl: photoUrl,
-      photoBase64: user.photo_base64 || null,
+      photoBase64: photoBase64,
       permissions: user.permissions || []
     });
   } catch (e) {
@@ -664,29 +681,37 @@ app.put('/api/me', authMiddleware, upload.single('photo'), async (req, res) => {
         const mimeType = req.file.mimetype || 'image/jpeg';
         photoBase64 = `data:${mimeType};base64,${base64String}`;
         
-        // Also try to save as file (for local development)
+        // Always store as base64 in photo_url for persistence (works on both local and Vercel)
+        // This ensures photos persist even on Vercel where files don't
+        photoUrl = photoBase64;
+        
+        // Also try to save as file (for local development - optional)
         if (!process.env.VERCEL) {
-          if (!fs.existsSync(IMAGES_DIR)) {
-            fs.mkdirSync(IMAGES_DIR, { recursive: true });
+          try {
+            if (!fs.existsSync(IMAGES_DIR)) {
+              fs.mkdirSync(IMAGES_DIR, { recursive: true });
+            }
+            
+            const photoId = nanoid();
+            const ext = path.extname(req.file.originalname || '.jpg') || '.jpg';
+            const fileName = `profile_${req.user.sub}_${photoId}${ext}`;
+            const filePath = path.join(IMAGES_DIR, fileName);
+            fs.writeFileSync(filePath, req.file.buffer);
+            console.log('✅ Also saved photo as file for local dev:', `/uploads/${fileName}`);
+          } catch (fileError) {
+            console.warn('⚠️  Could not save photo as file (non-critical):', fileError.message);
           }
-          
-          const photoId = nanoid();
-          const ext = path.extname(req.file.originalname || '.jpg') || '.jpg';
-          const fileName = `profile_${req.user.sub}_${photoId}${ext}`;
-          const filePath = path.join(IMAGES_DIR, fileName);
-          fs.writeFileSync(filePath, req.file.buffer);
-          photoUrl = `/uploads/${fileName}`;
-        } else {
-          // On Vercel, use base64 data URL directly
-          photoUrl = photoBase64;
         }
         
-        // Try to update photo_url and photo_base64 columns
+        // Store base64 data URL in photo_url column (works for both local and Vercel)
         updates.photo_url = photoUrl;
+        // Also try to store in photo_base64 if column exists
         updates.photo_base64 = photoBase64;
         console.log('✅ Profile photo converted to base64, size:', Math.round(base64String.length / 1024), 'KB');
+        console.log('📸 Photo URL type:', photoUrl.startsWith('data:') ? 'base64 data URL' : 'file path');
       } catch (photoError) {
-        console.warn('⚠️  Error processing profile photo:', photoError.message);
+        console.error('❌ Error processing profile photo:', photoError);
+        console.error('❌ Error details:', photoError.message, photoError.stack);
         // Continue without photo update
       }
     }
@@ -694,11 +719,24 @@ app.put('/api/me', authMiddleware, upload.single('photo'), async (req, res) => {
     // Update user - handle photo columns error gracefully
     let updatedUser;
     try {
+      console.log('💾 Attempting to update user with photo_url:', photoUrl ? (photoUrl.startsWith('data:') ? 'base64 data URL' : photoUrl) : 'none');
       updatedUser = await db.updateUser(req.user.sub, updates);
+      console.log('✅ User updated successfully. Photo URL in response:', updatedUser.photo_url ? (updatedUser.photo_url.startsWith('data:') ? 'base64 data URL' : updatedUser.photo_url) : 'none');
     } catch (updateError) {
-      // If error is about photo columns not existing, try again without them
-      if (updateError.message && (updateError.message.includes('photo_url') || updateError.message.includes('photo_base64'))) {
-        console.warn('⚠️  Photo column(s) not found, trying without photo columns');
+      console.error('❌ Error updating user:', updateError);
+      console.error('❌ Error message:', updateError.message);
+      // If error is about photo_base64 column not existing, try again without it (but keep photo_url)
+      if (updateError.message && updateError.message.includes('photo_base64')) {
+        console.warn('⚠️  photo_base64 column not found, trying with only photo_url');
+        const updatesWithoutBase64 = { ...updates };
+        delete updatesWithoutBase64.photo_base64;
+        updatedUser = await db.updateUser(req.user.sub, updatesWithoutBase64);
+        // Store photo URL in response
+        if (photoUrl) {
+          updatedUser.photo_url = photoUrl;
+        }
+      } else if (updateError.message && updateError.message.includes('photo_url')) {
+        console.warn('⚠️  photo_url column not found, trying without photo');
         const updatesWithoutPhoto = { ...updates };
         delete updatesWithoutPhoto.photo_url;
         delete updatesWithoutPhoto.photo_base64;
@@ -715,6 +753,9 @@ app.put('/api/me', authMiddleware, upload.single('photo'), async (req, res) => {
     
     // Get the photo URL from the updated user or use the one we just set
     const finalPhotoUrl = updatedUser.photo_url || updatedUser.photoUrl || updatedUser.photo_base64 || photoUrl || null;
+    const finalPhotoBase64 = updatedUser.photo_base64 || (finalPhotoUrl?.startsWith('data:') ? finalPhotoUrl : null) || photoBase64 || null;
+    
+    console.log('📤 Returning profile with photoUrl:', finalPhotoUrl ? (finalPhotoUrl.startsWith('data:') ? 'base64 data URL (present)' : finalPhotoUrl) : 'none');
     
     res.json({
       id: updatedUser.id,
@@ -725,7 +766,7 @@ app.put('/api/me', authMiddleware, upload.single('photo'), async (req, res) => {
       region: updatedUser.region || '',
       language: language || 'en',
       photoUrl: finalPhotoUrl,
-      photoBase64: updatedUser.photo_base64 || photoBase64 || null
+      photoBase64: finalPhotoBase64
     });
   } catch (e) {
     console.error('Error updating profile:', e);
@@ -1819,7 +1860,15 @@ app.get('/api/admin/users', authMiddleware, requireRole(['admin']), async (req, 
       createdAt: user.created_at || user.createdAt,
       lastActive: user.lastActive,
       userId: user.id,
-      photoUrl: user.photo_url || user.photoUrl || user.profile_photo || null,
+      photoUrl: (() => {
+        const url = user.photo_base64 || user.photo_url || user.photoUrl || user.profile_photo || null;
+        // Filter out file paths on Vercel (same logic as /api/me)
+        if (url && !url.startsWith('data:') && url.startsWith('/uploads/') && process.env.VERCEL) {
+          return null;
+        }
+        return url;
+      })(),
+      photoBase64: user.photo_base64 || null,
       region: user.region || user.location || '',
       village: user.village || '',
       district: user.district || '',
@@ -1999,6 +2048,54 @@ app.put('/api/admin/users/:id/status', authMiddleware, requireRole(['admin']), a
   } catch (e) {
     console.error('Error updating user status:', e);
     res.status(500).json({ error: 'Failed to update user status' });
+  }
+});
+
+// PERMANENT FIX: Admin endpoint to fix all users with invalid photo URLs
+// This sets photo_url to null for all users with file-based paths (which don't work on Vercel)
+app.post('/api/admin/fix-photos', authMiddleware, requireRole(['admin']), async (req, res) => {
+  try {
+    console.log('🔧 Starting photo fix migration...');
+    const users = await getUsers();
+    let fixedCount = 0;
+    let skippedCount = 0;
+    const errors = [];
+    
+    for (const user of users) {
+      const photoUrl = user.photo_url || user.photoUrl || user.profile_photo;
+      
+      // Check if user has a file-based photo URL (not base64)
+      if (photoUrl && !photoUrl.startsWith('data:') && photoUrl.startsWith('/uploads/')) {
+        try {
+          // Set photo_url to null so user can upload a new photo (which will be base64)
+          await db.updateUser(user.id, { 
+            photo_url: null,
+            photo_base64: null,
+            updated_at: new Date().toISOString()
+          });
+          console.log(`✅ Fixed user ${user.id} (${user.email}): Removed invalid photo URL`);
+          fixedCount++;
+        } catch (error) {
+          console.error(`❌ Error fixing user ${user.id}:`, error);
+          errors.push({ userId: user.id, email: user.email, error: error.message });
+        }
+      } else {
+        skippedCount++;
+      }
+    }
+    
+    console.log(`✅ Photo fix migration complete: ${fixedCount} fixed, ${skippedCount} skipped`);
+    
+    res.json({
+      success: true,
+      message: `Photo fix complete: ${fixedCount} users fixed, ${skippedCount} skipped`,
+      fixedCount,
+      skippedCount,
+      errors: errors.length > 0 ? errors : undefined
+    });
+  } catch (e) {
+    console.error('❌ Error fixing photos:', e);
+    res.status(500).json({ error: 'Failed to fix photos: ' + (e.message || 'Unknown error') });
   }
 });
 

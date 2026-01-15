@@ -9,6 +9,7 @@ export default function AdminUsers() {
   const [showAddUser, setShowAddUser] = useState(false)
   const [editingUser, setEditingUser] = useState(null)
   const [viewingUser, setViewingUser] = useState(null)
+  const [fixingPhotos, setFixingPhotos] = useState(false)
   const [filters, setFilters] = useState({
     role: '',
     status: '',
@@ -229,6 +230,42 @@ export default function AdminUsers() {
     }
   }
 
+  const handleFixPhotos = async () => {
+    const token = localStorage.getItem('token')
+    if (!token) return setError('Login required')
+    
+    if (!confirm('🔧 This will remove invalid file-based photo URLs for all users.\n\nUsers will need to upload new photos, which will be saved as base64 and work on Vercel.\n\nContinue?')) {
+      return
+    }
+    
+    setFixingPhotos(true)
+    setError('')
+    
+    try {
+      const res = await fetch('/api/admin/fix-photos', {
+        method: 'POST',
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'Failed to fix photos')
+      }
+      
+      const data = await res.json()
+      await loadUsers()
+      alert(`✅ ${data.message}\n\nFixed: ${data.fixedCount} users\nSkipped: ${data.skippedCount} users`)
+    } catch (err) {
+      setError(err.message || 'Failed to fix photos')
+      alert(`❌ ${err.message || 'Failed to fix photos'}`)
+    } finally {
+      setFixingPhotos(false)
+    }
+  }
+
   const getRolePermissions = (role) => {
     const permissions = {
       user: ['create_animal', 'view_own_animals', 'update_own_animals'],
@@ -294,7 +331,16 @@ export default function AdminUsers() {
         <div className="card">
           <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
             <h1>👥 User Management</h1>
-            <div className="row" style={{ gap: 8 }}>
+            <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+              <button 
+                className="btn secondary" 
+                onClick={handleFixPhotos}
+                disabled={fixingPhotos}
+                style={{ opacity: fixingPhotos ? 0.6 : 1 }}
+                title="Fix all users with invalid photo URLs (file paths that don't work on Vercel)"
+              >
+                {fixingPhotos ? '⏳ Fixing...' : '🔧 Fix Photos'}
+              </button>
               <button 
                 className="btn" 
                 onClick={() => setShowAddUser(true)}

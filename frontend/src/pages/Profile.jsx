@@ -77,13 +77,24 @@ export default function Profile() {
       let data = null
       try { data = await res.json() } catch {}
       if (!res.ok) throw new Error((data && data.error) || 'Save failed')
+      
+      console.log('✅ Profile saved successfully')
+      console.log('Response data:', data)
+      console.log('Photo URL in response:', data.photoUrl ? (data.photoUrl.startsWith('data:') ? 'base64 data URL' : data.photoUrl) : 'none')
+      console.log('Photo Base64 in response:', data.photoBase64 ? 'Present' : 'Not present')
+      
       // Update profile with response data
       setProfile(data)
       // Clear photo state after successful save
       setPhoto(null)
       setPhotoPreview(null)
-      // Update localStorage with new profile data
-      localStorage.setItem('user', JSON.stringify({ ...(JSON.parse(localStorage.getItem('user')||'{}')), name: data.name, photoUrl: data.photoUrl }))
+      // Update localStorage with new profile data (include both photoUrl and photoBase64)
+      localStorage.setItem('user', JSON.stringify({ 
+        ...(JSON.parse(localStorage.getItem('user')||'{}')), 
+        name: data.name, 
+        photoUrl: data.photoUrl,
+        photoBase64: data.photoBase64
+      }))
       setSuccess('✅ Profile updated successfully!')
       
       // Reload profile to ensure photo is displayed (in case of caching issues)
@@ -91,13 +102,16 @@ export default function Profile() {
         const token = localStorage.getItem('token')
         if (token) {
           try {
+            console.log('🔄 Reloading profile after save...')
             const res = await fetch('/api/me', { headers: { Authorization: `Bearer ${token}` } })
             if (res.ok) {
               const updatedProfile = await res.json()
+              console.log('✅ Profile reloaded. Photo URL:', updatedProfile.photoUrl ? (updatedProfile.photoUrl.startsWith('data:') ? 'base64 data URL' : updatedProfile.photoUrl) : 'none')
+              console.log('✅ Profile reloaded. Photo Base64:', updatedProfile.photoBase64 ? 'Present' : 'Not present')
               setProfile(updatedProfile)
             }
           } catch (e) {
-            console.error('Error reloading profile:', e)
+            console.error('❌ Error reloading profile:', e)
           }
         }
       }, 500)
@@ -155,34 +169,64 @@ export default function Profile() {
                     display: 'block'
                   }} 
                 />
-              ) : (profile?.photoUrl || profile?.photoBase64) ? (
-                <img 
-                  src={profile.photoBase64 || (profile.photoUrl?.startsWith('data:') ? profile.photoUrl : (profile.photoUrl?.startsWith('/uploads/') ? `${window.location.origin}${profile.photoUrl}?t=${Date.now()}` : `${profile.photoUrl}?t=${Date.now()}`))} 
-                  alt="avatar" 
-                  onError={(e) => {
-                    console.error('Error loading profile photo. URL:', profile.photoUrl || profile.photoBase64)
-                    console.error('Error event:', e)
-                    e.target.style.display = 'none'
-                    const placeholder = e.target.nextElementSibling
-                    if (placeholder) {
-                      placeholder.style.display = 'flex'
-                      console.log('Showing placeholder instead')
-                    }
-                  }}
-                  onLoad={() => {
-                    console.log('Profile photo loaded successfully from:', profile.photoBase64 ? 'base64' : profile.photoUrl)
-                  }}
-                  style={{ 
-                    width: isMobile ? 150 : 200, 
-                    height: isMobile ? 150 : 200, 
-                    borderRadius: 12, 
-                    objectFit: 'cover', 
-                    border: '2px solid #ddd',
-                    margin: '0 auto',
-                    display: 'block'
-                  }} 
-                />
-              ) : null}
+              ) : (profile?.photoUrl || profile?.photoBase64) ? (() => {
+                // Determine the photo source: prefer base64, then check if photoUrl is base64, otherwise use photoUrl as file path
+                let photoSrc = profile.photoBase64;
+                if (!photoSrc && profile.photoUrl) {
+                  if (profile.photoUrl.startsWith('data:')) {
+                    // photoUrl is already a base64 data URL
+                    photoSrc = profile.photoUrl;
+                  } else if (profile.photoUrl.startsWith('/uploads/')) {
+                    // File path - construct full URL with cache busting
+                    photoSrc = `${window.location.origin}${profile.photoUrl}?t=${Date.now()}`;
+                  } else {
+                    // External URL or other format
+                    photoSrc = `${profile.photoUrl}?t=${Date.now()}`;
+                  }
+                }
+                
+                return (
+                  <img 
+                    key={`photo-${Date.now()}-${profile.photoUrl || profile.photoBase64 || 'none'}`}
+                    src={photoSrc} 
+                    alt="avatar" 
+                    onError={(e) => {
+                      console.error('❌ Error loading profile photo')
+                      console.error('Photo URL:', profile.photoUrl)
+                      console.error('Photo Base64:', profile.photoBase64 ? 'Present (' + profile.photoBase64.substring(0, 50) + '...)' : 'Not present')
+                      console.error('Photo Source:', photoSrc ? (photoSrc.substring(0, 50) + '...') : 'none')
+                      console.error('Error target:', e.target)
+                      e.target.style.display = 'none'
+                      const placeholder = e.target.nextElementSibling
+                      if (placeholder) {
+                        placeholder.style.display = 'flex'
+                        console.log('✅ Showing placeholder instead')
+                      }
+                      // If photo URL is a file path (not base64), it won't work on Vercel
+                      if (profile.photoUrl && profile.photoUrl.startsWith('/uploads/') && !profile.photoBase64) {
+                        setError('⚠️ Your profile photo is stored as a file path and cannot be displayed on this server. Please select a new photo and click "Save Changes" to fix this.')
+                      } else {
+                        setError('Profile photo could not be loaded. Please re-upload your photo.')
+                      }
+                    }}
+                    onLoad={() => {
+                      console.log('✅ Profile photo loaded successfully')
+                      console.log('Source type:', profile.photoBase64 ? 'base64 field' : (profile.photoUrl?.startsWith('data:') ? 'base64 in photoUrl' : 'file URL'))
+                      setError('') // Clear any previous errors
+                    }}
+                    style={{ 
+                      width: isMobile ? 150 : 200, 
+                      height: isMobile ? 150 : 200, 
+                      borderRadius: 12, 
+                      objectFit: 'cover', 
+                      border: '2px solid #ddd',
+                      margin: '0 auto',
+                      display: 'block',
+                      backgroundColor: '#f0f0f0'
+                    }} 
+                  />
+                );
+              })() : null}
               <div style={{ 
                 width: isMobile ? 150 : 200, 
                 height: isMobile ? 150 : 200, 
@@ -223,7 +267,16 @@ export default function Profile() {
                   maxWidth: isMobile ? '100%' : '220px'
                 }}
               />
-              {photo && <small style={{ color: '#666', fontSize: isMobile ? '14px' : '12px', marginTop: '5px', textAlign: 'center', wordBreak: 'break-word' }}>Selected: {photo.name}</small>}
+              {photo && (
+                <div style={{ marginTop: '8px', textAlign: 'center' }}>
+                  <small style={{ color: '#4CAF50', fontSize: isMobile ? '14px' : '12px', fontWeight: '500', display: 'block' }}>
+                    ✓ Selected: {photo.name}
+                  </small>
+                  <small style={{ color: '#ff9800', fontSize: isMobile ? '13px' : '11px', display: 'block', marginTop: '4px' }}>
+                    Click "Save Changes" to upload and save your photo
+                  </small>
+                </div>
+              )}
             </div>
             <div className="stack" style={{ width: '100%', gap: isMobile ? '16px' : '12px' }}>
               <div className="stack">
