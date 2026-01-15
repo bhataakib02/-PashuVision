@@ -390,7 +390,7 @@ export default function Records() {
                             }
                           }
                           
-                          fetch('/api/animals/${it.id}', {
+                          fetch(\`/api/animals/\${it.id}\`, {
                             method: 'PUT',
                             headers: {
                               'Content-Type': 'application/json',
