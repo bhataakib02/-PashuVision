@@ -262,13 +262,18 @@ export default function RecordNew() {
     setPredicting(true)
     
     try {
-    const fd = new FormData()
-    fd.append('image', files[0])
+      const token = localStorage.getItem('token')
+      if (!token) {
+        setError('Login required. Please log in to use AI prediction.')
+        return
+      }
+      
+      const fd = new FormData()
+      fd.append('image', files[0])
       
       // Add image quality info for better prediction
       fd.append('imageQuality', JSON.stringify(imageQuality))
       
-      const token = localStorage.getItem('token')
       const res = await fetch('/api/predict', { 
         method: 'POST', 
         body: fd,
@@ -280,20 +285,48 @@ export default function RecordNew() {
       let data
       if (!res.ok) {
         // Try to extract detailed error message from backend
-        try {
-          const errorData = await res.json()
-          const errorMessage = errorData.message || errorData.error || 'Prediction failed'
-          const errorDetails = errorData.details ? `\n\n${errorData.details}` : ''
-          throw new Error(errorMessage + errorDetails)
-        } catch (parseError) {
-          // If JSON parsing fails, use status text
-          throw new Error(`Prediction failed (${res.status}): ${res.statusText || 'Unknown error'}`)
+        let errorData = {}
+        const contentType = res.headers.get('content-type')
+        
+        if (contentType && contentType.includes('application/json')) {
+          try {
+            errorData = await res.json()
+          } catch (parseError) {
+            console.error('Failed to parse error response:', parseError)
+          }
         }
+        
+        // Build comprehensive error message
+        const errorMessage = errorData.message || errorData.error || 'Prediction failed'
+        let fullErrorMessage = errorMessage
+        
+        // Add details if available
+        if (errorData.details) {
+          fullErrorMessage += `. ${errorData.details}`
+        }
+        
+        // Add retry information for 503 errors
+        if (res.status === 503) {
+          if (errorData.retryAfter) {
+            fullErrorMessage += ` Please wait ${errorData.retryAfter} seconds and try again.`
+          } else if (errorMessage.includes('loading')) {
+            fullErrorMessage += ' The AI model is loading. Please wait 30-90 seconds and try again.'
+          } else {
+            fullErrorMessage += ' The AI model service may be unavailable. Please check if the service is running.'
+          }
+        }
+        
+        // Add status code if not already included
+        if (!errorMessage.includes(`(${res.status})`)) {
+          fullErrorMessage = `Prediction failed (${res.status}): ${fullErrorMessage}`
+        }
+        
+        throw new Error(fullErrorMessage)
       } else {
         data = await res.json()
       }
       
-    setPred(data)
+      setPred(data)
       
       // Auto-fill breed information
       if (data.predictions?.[0]?.breed) {
@@ -316,8 +349,16 @@ export default function RecordNew() {
       console.error('Prediction error:', err)
       // Display the actual error message from the backend (includes details about model service)
       // Handle newlines in error messages (from deployment instructions)
-      const errorMsg = err.message || 'Failed to predict breed. Please ensure the AI model service is running.'
-      setError(errorMsg.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim())
+      let errorMsg = err.message || 'Failed to predict breed. Please ensure the AI model service is running.'
+      
+      // Handle network errors
+      if (err.name === 'TypeError' && err.message.includes('fetch')) {
+        errorMsg = 'Network error: Unable to connect to the prediction service. Please check your internet connection.'
+      }
+      
+      // Clean up error message for display
+      errorMsg = errorMsg.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim()
+      setError(errorMsg)
       setSuccess('')
     } finally {
       setPredicting(false)
@@ -329,6 +370,17 @@ export default function RecordNew() {
     const token = localStorage.getItem('token')
     if (!token) return setError('Login required')
     if (!files.length) return setError('Image required')
+    
+    // Validate required fields
+    if (!form.ownerName || !form.ownerName.trim()) {
+      setError('Owner Name is required')
+      return
+    }
+    if (!form.location || !form.location.trim()) {
+      setError('Location is required')
+      return
+    }
+    
     setSaving(true)
     setError('')
     setSuccess('')
@@ -337,16 +389,25 @@ export default function RecordNew() {
       const fd = new FormData()
       files.forEach(f => fd.append('images', f))
       
-      // Enhanced form data
-      fd.append('ownerName', form.ownerName)
-      fd.append('location', form.location)
-      fd.append('notes', form.notes)
-      fd.append('ageMonths', form.ageMonths)
-      fd.append('gender', form.gender)
-      fd.append('earTag', form.earTag)
-      fd.append('weight', form.weight)
-      fd.append('healthStatus', form.healthStatus)
-      fd.append('vaccinationStatus', form.vaccinationStatus)
+      // Enhanced form data - ensure all fields have values
+      fd.append('ownerName', form.ownerName || '')
+      fd.append('location', form.location || '')
+      fd.append('notes', form.notes || '')
+      
+      // Calculate age in months if years/months provided
+      let ageMonthsValue = form.ageMonths
+      if (!ageMonthsValue && (form.ageYears || form.ageMonthsOnly)) {
+        ageMonthsValue = convertToMonths(form.ageYears, form.ageMonthsOnly)
+      }
+      if (ageMonthsValue) {
+        fd.append('ageMonths', ageMonthsValue.toString())
+      }
+      
+      fd.append('gender', form.gender || '')
+      fd.append('earTag', form.earTag || '')
+      fd.append('weight', form.weight || '')
+      fd.append('healthStatus', form.healthStatus || 'healthy')
+      fd.append('vaccinationStatus', form.vaccinationStatus || 'unknown')
       
       // Breed data
       if (form.predictedBreed) {
@@ -403,7 +464,12 @@ export default function RecordNew() {
         } catch (e) {
           errorData = { error: `Save failed (${res.status})` };
         }
-        const errorMsg = errorData.error || 'Save failed';
+        
+        // Build comprehensive error message
+        let errorMsg = errorData.error || 'Save failed';
+        if (errorData.details) {
+          errorMsg += `: ${errorData.details}`;
+        }
         
         // If token error, redirect to login
         if (res.status === 401 && (errorMsg.includes('token') || errorMsg.includes('Token'))) {
@@ -426,8 +492,13 @@ export default function RecordNew() {
     } catch (e) {
       const errorMsg = e.message || 'Save failed'
       setError(errorMsg)
-      alert(`❌ ${errorMsg}`)
+      // Don't use alert - error banner will show the message
       console.error('Save error:', e)
+      
+      // Log detailed error for debugging
+      if (e.stack) {
+        console.error('Error stack:', e.stack)
+      }
     } finally {
       setSaving(false)
     }

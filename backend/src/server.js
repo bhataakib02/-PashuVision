@@ -321,6 +321,11 @@ app.post('/api/auth/verify-otp', (req, res) => {
     const existingUser = users.find(u => u.phone === phone);
     
     if (existingUser) {
+      // Ensure user has permissions set based on role
+      if (!existingUser.permissions || existingUser.permissions.length === 0) {
+        existingUser.permissions = getRolePermissions(existingUser.role || 'user');
+      }
+      
       // User exists, create token and login
       const token = createToken(existingUser);
       logActivity('auth.otp_login_success', { phone, userId: existingUser.id });
@@ -337,7 +342,7 @@ app.post('/api/auth/verify-otp', (req, res) => {
           village: existingUser.village,
           district: existingUser.district,
           state: existingUser.state,
-          permissions: existingUser.permissions
+          permissions: existingUser.permissions || getRolePermissions(existingUser.role || 'user')
         }
       });
     } else {
@@ -388,7 +393,7 @@ app.post('/api/auth/setup-password', async (req, res) => {
       role: 'user', // Default role
       created_at: new Date().toISOString(), // Use snake_case for Supabase
       is_active: true,
-      permissions: ['create_animal', 'view_own_animals', 'update_own_animals'],
+      permissions: getRolePermissions('user'),
       biometricEnabled: false
     };
     
@@ -486,7 +491,7 @@ app.post('/api/auth/register', async (req, res) => {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       is_active: true,
-      permissions: ['create_animal', 'view_own_animals', 'update_own_animals']
+      permissions: getRolePermissions(role)
     };
     
     await db.createUser(user);
@@ -569,9 +574,31 @@ app.post('/api/auth/login', async (req, res) => {
       }
     }
     
+    // Ensure user has permissions set based on role
+    if (!user.permissions || user.permissions.length === 0) {
+      user.permissions = getRolePermissions(user.role || 'user');
+      // Update user in database with permissions (non-blocking)
+      if (db && typeof db.updateUser === 'function') {
+        try {
+          await db.updateUser(user.id, { permissions: user.permissions });
+        } catch (updateError) {
+          console.warn('⚠️  Could not update user permissions:', updateError.message);
+        }
+      }
+    }
+    
     const token = createToken(user);
     logActivity('auth.login', { userId: user.id }).catch(console.error);
-    res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+    res.json({ 
+      token, 
+      user: { 
+        id: user.id, 
+        name: user.name, 
+        email: user.email, 
+        role: user.role,
+        permissions: user.permissions || getRolePermissions(user.role || 'user')
+      } 
+    });
   } catch (e) {
     console.error('Login error:', e);
     console.error('Login error stack:', e.stack);
@@ -918,7 +945,37 @@ app.post('/api/animals', authMiddleware, upload.array('images', 6), async (req, 
     });
   } catch (e) {
     console.error('Error creating animal:', e);
-    res.status(500).json({ error: 'Failed to create animal record', details: e.message });
+    console.error('Error stack:', e.stack);
+    
+    // Provide more specific error messages
+    let errorMessage = 'Failed to create animal record';
+    let errorDetails = e.message || 'Unknown error';
+    
+    // Check for specific error types
+    if (e.code === '23505') {
+      errorMessage = 'Duplicate record error';
+      errorDetails = 'An animal record with this information already exists.';
+    } else if (e.code === '23503') {
+      errorMessage = 'Foreign key constraint error';
+      errorDetails = 'Invalid reference in the record. Please check your data.';
+    } else if (e.code === '23502') {
+      errorMessage = 'Required field missing';
+      errorDetails = 'Some required fields are missing. Please fill all required fields.';
+    } else if (e.message && e.message.includes('null value')) {
+      errorMessage = 'Missing required field';
+      errorDetails = 'Some required fields are missing. Please ensure Owner Name and Location are filled.';
+    } else if (e.message && e.message.includes('database')) {
+      errorMessage = 'Database connection error';
+      errorDetails = 'Unable to connect to the database. Please try again later.';
+    } else if (e.details) {
+      errorDetails = e.details;
+    }
+    
+    res.status(500).json({ 
+      error: errorMessage, 
+      details: errorDetails,
+      code: e.code || null
+    });
   }
 });
 
@@ -1700,7 +1757,13 @@ app.put('/api/admin/users/:id/status', authMiddleware, requireRole(['admin']), a
 // Helper function to get default permissions for roles
 function getRolePermissions(role) {
   const permissions = {
-    user: ['create_animal', 'view_own_animals', 'update_own_animals'],
+    // Regular users only get basic permissions for registered users
+    user: [
+      'create_animal',
+      'view_own_animals',
+      'update_own_animals'
+    ],
+    // Admin gets all permissions
     admin: ['all']
   };
   return permissions[role] || [];

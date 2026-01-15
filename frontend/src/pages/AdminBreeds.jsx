@@ -202,31 +202,52 @@ export default function AdminBreeds() {
     setError('')
     
     try {
+      const token = localStorage.getItem('token')
+      if (!token) {
+        setError('Login required')
+        return
+      }
+      
       const formData = new FormData()
       formData.append('image', file)
       
       const res = await fetch('/api/predict', {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
         body: formData
       })
       
-      const data = await res.json().catch(() => ({}))
-      
+      let data
       if (!res.ok) {
-        throw new Error(data.error || 'Prediction failed')
+        // Try to extract detailed error message from backend
+        try {
+          const errorData = await res.json()
+          const errorMessage = errorData.message || errorData.error || 'Prediction failed'
+          const errorDetails = errorData.details ? `\n\n${errorData.details}` : ''
+          throw new Error(errorMessage + errorDetails)
+        } catch (parseError) {
+          // If JSON parsing fails, use status text
+          throw new Error(`Prediction failed (${res.status}): ${res.statusText || 'Unknown error'}`)
         }
+      } else {
+        data = await res.json()
+      }
         
       // Auto-fill breed name from prediction
       if (data.predictions?.[0]?.breed) {
         const topPrediction = data.predictions[0]
-          setNewBreed(prev => ({
-            ...prev,
+        setNewBreed(prev => ({
+          ...prev,
           name: prev.name || topPrediction.breed || ''
         }))
       }
     } catch (err) {
       console.error('Prediction error:', err)
-      // Don't set error for prediction failures, just log it
+      // Show error message to user
+      const errorMsg = err.message || 'Failed to predict breed. Please ensure the AI model service is running.'
+      setError(errorMsg.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim())
     } finally {
       setPredicting(false)
     }
