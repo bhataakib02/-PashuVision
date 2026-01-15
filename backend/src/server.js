@@ -1153,13 +1153,23 @@ app.post('/api/predict', authMiddleware, upload.single('image'), async (req, res
       const serviceUrl = process.env.PYTORCH_SERVICE_URL || 'http://localhost:5001';
       const isExternalService = serviceUrl && !serviceUrl.startsWith('http://localhost') && !serviceUrl.startsWith('http://127.0.0.1');
       
+      // Check if error is about model loading
+      const isModelLoading = speciesError.message.includes('still loading') || 
+                            speciesError.message.includes('not loaded') ||
+                            speciesError.message.includes('Model is');
+      
       return res.status(503).json({ 
-        error: 'AI model species detection unavailable',
-        message: 'The PyTorch model prediction service is not available.',
+        error: isModelLoading ? 'Model is loading' : 'AI model species detection unavailable',
+        message: isModelLoading 
+          ? 'The AI model is currently loading. This happens on the first request and takes 30-90 seconds. Please wait a moment and try again.'
+          : 'The PyTorch model prediction service is not available.',
         details: isExternalService 
-          ? `Please ensure your external Python service at ${serviceUrl} is deployed and running. See DEPLOYMENT.md for instructions.`
+          ? (isModelLoading 
+              ? `Model is loading on Railway service at ${serviceUrl}. First request triggers model download and loading.`
+              : `Please ensure your external Python service at ${serviceUrl} is deployed and running. See DEPLOYMENT.md for instructions.`)
           : 'For local development: Start the Python service with: cd backend/models && python pytorch_service.py\nFor production: Deploy the Python service separately and set PYTORCH_SERVICE_URL environment variable.',
         serviceUrl: serviceUrl,
+        retryAfter: isModelLoading ? 30 : null, // Suggest retry after 30s if loading
         deploymentGuide: 'See DEPLOYMENT.md for instructions on deploying the Python service'
       });
     }
@@ -1181,15 +1191,24 @@ app.post('/api/predict', authMiddleware, upload.single('image'), async (req, res
       const serviceUrl = process.env.PYTORCH_SERVICE_URL || 'http://localhost:5001';
       const isExternalService = serviceUrl && !serviceUrl.startsWith('http://localhost') && !serviceUrl.startsWith('http://127.0.0.1');
       
+      // Check if error is about model loading
+      const isModelLoading = predictionError.message.includes('still loading') || 
+                            predictionError.message.includes('not loaded') ||
+                            predictionError.message.includes('Model is');
+      
       return res.status(503).json({ 
-        error: 'AI model prediction service unavailable',
-        message: 'The PyTorch model prediction service is not available. No mock predictions will be used.',
+        error: isModelLoading ? 'Model is loading' : 'AI model prediction service unavailable',
+        message: isModelLoading 
+          ? 'The AI model is currently loading. This happens on the first request and takes 30-90 seconds. Please wait a moment and try again.'
+          : 'The PyTorch model prediction service is not available.',
         details: isExternalService 
-          ? `Please ensure your external Python service at ${serviceUrl} is deployed and running. See DEPLOYMENT.md for instructions.`
+          ? (isModelLoading 
+              ? `Model is loading on Railway service at ${serviceUrl}. First request triggers model download and loading.`
+              : `Please ensure your external Python service at ${serviceUrl} is deployed and running. See DEPLOYMENT.md for instructions.`)
           : 'For local development: Start the Python service with: cd backend/models && python pytorch_service.py\nFor production: Deploy the Python service separately (Railway, Render, etc.) and set PYTORCH_SERVICE_URL environment variable.',
         serviceUrl: serviceUrl,
-        modelFile: 'best_model_convnext_base_acc0.7007.pth',
-        deploymentGuide: 'See DEPLOYMENT.md for instructions on deploying the Python service'
+        retryAfter: isModelLoading ? 30 : null, // Suggest retry after 30s if loading
+        modelFile: 'best_model_convnext_base_acc0.7007.pth'
       });
     }
     

@@ -288,37 +288,75 @@ class PyTorchPredictor {
     }
   }
 
-  async predictViaPythonService(imageBuffer) {
-      const formData = new FormData();
-      formData.append('image', imageBuffer, {
-        filename: 'image.jpg',
-        contentType: 'image/jpeg'
-      });
+  async predictViaPythonService(imageBuffer, retryCount = 0) {
+    const maxRetries = 6; // Maximum retries for model loading
+    const maxWaitTime = 90000; // 90 seconds total max wait
+    const baseWaitTime = 5000; // Start with 5 seconds
+    
+    const formData = new FormData();
+    formData.append('image', imageBuffer, {
+      filename: 'image.jpg',
+      contentType: 'image/jpeg'
+    });
 
+    let timeoutId = null;
+    try {
+      // Create timeout controller for Node.js compatibility
+      const controller = new AbortController();
+      timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout
+      
       const response = await fetch(`${this.pythonServiceUrl}/predict`, {
         method: 'POST',
-        body: formData
+        body: formData,
+        signal: controller.signal
       });
+      
+      if (timeoutId) clearTimeout(timeoutId);
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => 'Unknown error');
         
-        // Better error messages for common issues
+        // Handle 503 Service Unavailable (model loading)
         if (response.status === 503) {
           try {
             const errorData = JSON.parse(errorText);
-            if (errorData.status === 'loading' || errorData.model_loading) {
-              throw new Error('Model is still loading. Please wait 30-60 seconds and try again.');
+            const isModelLoading = errorData.status === 'loading' || 
+                                 errorData.model_loading || 
+                                 errorData.status === 'not_loaded' || 
+                                 errorData.error === 'Model not loaded';
+            
+            if (isModelLoading && retryCount < maxRetries) {
+              // Calculate wait time with exponential backoff (capped)
+              const waitTime = Math.min(baseWaitTime * Math.pow(2, retryCount), 20000); // Max 20s per wait
+              const totalWaitTime = retryCount * baseWaitTime;
+              
+              if (totalWaitTime < maxWaitTime) {
+                console.log(`⏳ Model is loading (attempt ${retryCount + 1}/${maxRetries}), waiting ${waitTime/1000}s before retry...`);
+                await new Promise(resolve => setTimeout(resolve, waitTime));
+                
+                // Retry the request
+                return this.predictViaPythonService(imageBuffer, retryCount + 1);
+              }
             }
-            if (errorData.status === 'not_loaded' || errorData.error === 'Model not loaded') {
-              throw new Error('Model is not loaded yet. The first request triggers model loading. Please wait 30-60 seconds and try again.');
+            
+            // If we've exhausted retries or model loading status
+            if (isModelLoading) {
+              throw new Error(`Model is still loading after ${retryCount} retries. Please wait a moment and try again. The first request triggers model loading which takes 30-90 seconds.`);
             }
           } catch (e) {
             // If it's already our custom error, re-throw it
             if (e.message.includes('Model is') || e.message.includes('still loading') || e.message.includes('not loaded')) {
               throw e;
             }
-            // Not JSON or different error, use original error
+            // If JSON parse failed, check if it's a loading message
+            if (errorText.includes('loading') || errorText.includes('not loaded')) {
+              if (retryCount < maxRetries) {
+                const waitTime = Math.min(baseWaitTime * Math.pow(2, retryCount), 20000);
+                console.log(`⏳ Model appears to be loading, waiting ${waitTime/1000}s before retry...`);
+                await new Promise(resolve => setTimeout(resolve, waitTime));
+                return this.predictViaPythonService(imageBuffer, retryCount + 1);
+              }
+            }
           }
         }
         
@@ -327,12 +365,31 @@ class PyTorchPredictor {
 
       const data = await response.json();
     
-    // Validate response has predictions
-    if (!data.predictions || !Array.isArray(data.predictions) || data.predictions.length === 0) {
-      throw new Error('Python service returned empty predictions');
-    }
+      // Validate response has predictions
+      if (!data.predictions || !Array.isArray(data.predictions) || data.predictions.length === 0) {
+        throw new Error('Python service returned empty predictions');
+      }
     
-    return data.predictions;
+      return data.predictions;
+    } catch (error) {
+      // Clear timeout if it was set
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      
+      // Handle timeout or network errors
+      if (error.name === 'TimeoutError' || error.name === 'AbortError' || error.message.includes('aborted')) {
+        if (retryCount < maxRetries) {
+          const waitTime = Math.min(baseWaitTime * Math.pow(2, retryCount), 20000);
+          console.log(`⏳ Request timeout, retrying in ${waitTime/1000}s...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          return this.predictViaPythonService(imageBuffer, retryCount + 1);
+        }
+        throw new Error('Request timeout - model may still be loading. Please try again in a moment.');
+      }
+      throw error;
+    }
   }
 
   async detectSpecies(imageBuffer) {
@@ -350,10 +407,17 @@ class PyTorchPredictor {
             contentType: 'image/jpeg'
           });
 
+          // Create timeout controller for Node.js compatibility
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout
+          
           const response = await fetch(`${this.pythonServiceUrl}/species`, {
             method: 'POST',
-            body: formData
+            body: formData,
+            signal: controller.signal
           });
+          
+          clearTimeout(timeoutId);
 
           if (response.ok) {
             const data = await response.json();
