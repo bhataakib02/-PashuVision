@@ -52,3 +52,5 @@ coverage/
 .coverage
 .pytest_cache/
 backend/models/best_model_convnext_base_acc0.7007.pth
+backend/models/best_model_quantized.pth
+*.pth
