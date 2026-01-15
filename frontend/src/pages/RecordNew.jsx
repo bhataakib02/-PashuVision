@@ -494,11 +494,20 @@ export default function RecordNew() {
         return
       }
       
-      const res = await fetch('/api/animals', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: fd,
-      })
+      // Create a timeout promise
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Request timeout. Please check your connection and try again.')), 30000); // 30 second timeout
+      });
+      
+      // Race between fetch and timeout
+      const res = await Promise.race([
+        fetch('/api/animals', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: fd,
+        }),
+        timeoutPromise
+      ])
       
       if (!res.ok) {
         let errorData;
@@ -533,7 +542,17 @@ export default function RecordNew() {
       setTimeout(() => setSuccess(''), 5000)
       
     } catch (e) {
-      const errorMsg = e.message || 'Save failed'
+      // Handle different types of errors with more specific messages
+      let errorMsg = 'Save failed';
+      
+      if (e.message === 'Failed to fetch' || e.name === 'TypeError') {
+        // Network error - provide helpful message
+        errorMsg = 'Unable to connect to server. Please check your internet connection and try again.';
+        console.error('Network error - check connection:', e);
+      } else if (e.message) {
+        errorMsg = e.message;
+      }
+      
       setError(errorMsg)
       // Don't use alert - error banner will show the message
       console.error('Save error:', e)
@@ -541,6 +560,11 @@ export default function RecordNew() {
       // Log detailed error for debugging
       if (e.stack) {
         console.error('Error stack:', e.stack)
+      }
+      
+      // Check if offline
+      if (!navigator.onLine) {
+        setError('You are offline. Please check your internet connection and try again.');
       }
     } finally {
       setSaving(false)

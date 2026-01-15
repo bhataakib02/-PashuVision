@@ -4,13 +4,39 @@
  */
 
 /**
+ * Gets the API base URL based on the current environment
+ * @returns {string} API base URL
+ */
+export function getApiBaseUrl() {
+  // In development, use relative URL (Vite proxy handles it)
+  if (import.meta.env.DEV) {
+    return '';
+  }
+  
+  // In production, check if we're on the same domain or need absolute URL
+  // If the current origin matches the expected domain, use relative URL
+  // Otherwise, you might need to set VITE_API_URL environment variable
+  const apiUrl = import.meta.env.VITE_API_URL;
+  if (apiUrl) {
+    return apiUrl.endsWith('/') ? apiUrl.slice(0, -1) : apiUrl;
+  }
+  
+  // Default: use relative URL (works when frontend and backend are on same domain)
+  return '';
+}
+
+/**
  * Makes an API request with consistent error handling
- * @param {string} url - API endpoint
+ * @param {string} url - API endpoint (can be relative or absolute)
  * @param {object} options - Fetch options
  * @returns {Promise<{data: any, error: string|null}>}
  */
 export async function apiRequest(url, options = {}) {
   const token = localStorage.getItem('token');
+  
+  // Ensure URL is absolute if needed
+  const baseUrl = getApiBaseUrl();
+  const fullUrl = url.startsWith('http') ? url : `${baseUrl}${url}`;
   
   const defaultOptions = {
     headers: {
@@ -20,7 +46,7 @@ export async function apiRequest(url, options = {}) {
   };
 
   try {
-    const res = await fetch(url, { ...defaultOptions, ...options });
+    const res = await fetch(fullUrl, { ...defaultOptions, ...options });
     
     // Try to parse JSON response
     let data;
@@ -40,9 +66,16 @@ export async function apiRequest(url, options = {}) {
     return { data, error: null };
   } catch (err) {
     console.error('API request error:', err);
+    // Provide more specific error messages
+    let errorMessage = 'Network error. Please check your connection.';
+    if (err.message === 'Failed to fetch') {
+      errorMessage = 'Unable to connect to server. Please check your internet connection and try again.';
+    } else if (err.message) {
+      errorMessage = err.message;
+    }
     return { 
       data: null, 
-      error: err.message || 'Network error. Please check your connection.' 
+      error: errorMessage
     };
   }
 }
