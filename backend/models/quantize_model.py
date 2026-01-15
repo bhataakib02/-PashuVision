@@ -45,15 +45,47 @@ def quantize_model(input_path, output_path):
             elif 'config' in checkpoint and isinstance(checkpoint['config'], dict):
                 num_classes = checkpoint['config'].get('num_classes', 40)
         
-        # Create model architecture (ConvNeXt Tiny)
+        # Auto-detect model architecture from checkpoint dimensions
+        # Check stem layer dimensions to determine architecture
+        architecture = 'convnext_tiny'  # default
+        if 'stem.0.weight' in state_dict:
+            stem_dim = state_dict['stem.0.weight'].shape[0]
+            if stem_dim == 128:
+                architecture = 'convnext_base'
+                print(f"🔍 Detected ConvNeXt Base architecture (stem dim: {stem_dim})", flush=True)
+            elif stem_dim == 96:
+                architecture = 'convnext_tiny'
+                print(f"🔍 Detected ConvNeXt Tiny architecture (stem dim: {stem_dim})", flush=True)
+            elif stem_dim == 192:
+                architecture = 'convnext_large'
+                print(f"🔍 Detected ConvNeXt Large architecture (stem dim: {stem_dim})", flush=True)
+            else:
+                print(f"⚠️  Unknown architecture (stem dim: {stem_dim}), defaulting to convnext_base", flush=True)
+                architecture = 'convnext_base'
+        
+        # Also check filename for hints
+        if 'base' in input_path.lower():
+            architecture = 'convnext_base'
+            print(f"🔍 Using ConvNeXt Base (detected from filename)", flush=True)
+        elif 'tiny' in input_path.lower():
+            architecture = 'convnext_tiny'
+            print(f"🔍 Using ConvNeXt Tiny (detected from filename)", flush=True)
+        
+        # Create model architecture
         try:
             import timm
-            model = timm.create_model('convnext_tiny', pretrained=False, num_classes=num_classes)
+            print(f"📦 Creating {architecture} model with {num_classes} classes...", flush=True)
+            model = timm.create_model(architecture, pretrained=False, num_classes=num_classes)
         except ImportError:
             print("❌ Error: timm not installed. Install with: pip install timm")
             return False
+        except Exception as e:
+            print(f"❌ Error creating {architecture} model: {e}", flush=True)
+            print("   Trying convnext_base as fallback...", flush=True)
+            model = timm.create_model('convnext_base', pretrained=False, num_classes=num_classes)
         
         # Load weights
+        print("📥 Loading weights into model...", flush=True)
         model.load_state_dict(state_dict, strict=False)
         model.eval()
         
