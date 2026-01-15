@@ -320,31 +320,48 @@ def detect_species():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    print("🚀 Starting PyTorch Prediction Service...")
-    print(f"   Device: {device}")
-    print(f"   Working directory: {os.getcwd()}")
-    print(f"   Script location: {os.path.abspath(__file__)}")
-    
-    # List directory contents for debugging
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    print(f"   Script directory: {script_dir}")
-    print(f"   Contents of {script_dir}:")
     try:
-        for item in os.listdir(script_dir):
-            item_path = os.path.join(script_dir, item)
-            size = os.path.getsize(item_path) if os.path.isfile(item_path) else 0
-            print(f"      - {item} ({size} bytes)" if os.path.isfile(item_path) else f"      - {item}/")
+        print("🚀 Starting PyTorch Prediction Service...")
+        print(f"   Device: {device}")
+        print(f"   Working directory: {os.getcwd()}")
+        print(f"   Script location: {os.path.abspath(__file__)}")
+        print(f"   Python version: {sys.version}")
+        print(f"   Python executable: {sys.executable}")
+        
+        # List directory contents for debugging
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        print(f"   Script directory: {script_dir}")
+        print(f"   Contents of {script_dir}:")
+        try:
+            for item in os.listdir(script_dir):
+                item_path = os.path.join(script_dir, item)
+                size = os.path.getsize(item_path) if os.path.isfile(item_path) else 0
+                print(f"      - {item} ({size} bytes)" if os.path.isfile(item_path) else f"      - {item}/")
+        except Exception as e:
+            print(f"      Error listing directory: {e}")
+        
+        # Try to load model, but start server anyway
+        try:
+            model_loaded = load_model()
+            if not model_loaded:
+                print("⚠️  Warning: Model not loaded. Service will start but /predict will fail.")
+                print("   Health endpoint will still work.")
+        except Exception as e:
+            print(f"⚠️  Error during model loading: {e}")
+            import traceback
+            traceback.print_exc()
+            print("   Service will start anyway, but /predict will fail.")
+        
+        port = int(os.environ.get('PORT', 5001))
+        print(f"✅ Starting server on port {port}")
+        print(f"   Health check available at: http://0.0.0.0:{port}/health")
+        print(f"   Environment PORT variable: {os.environ.get('PORT', 'not set')}")
+        
+        # Start the Flask server
+        app.run(host='0.0.0.0', port=port, debug=False)
     except Exception as e:
-        print(f"      Error listing directory: {e}")
-    
-    # Try to load model, but start server anyway
-    model_loaded = load_model()
-    if not model_loaded:
-        print("⚠️  Warning: Model not loaded. Service will start but /predict will fail.")
-        print("   Health endpoint will still work.")
-    
-    port = int(os.environ.get('PORT', 5001))
-    print(f"✅ Starting server on port {port}")
-    print(f"   Health check available at: http://0.0.0.0:{port}/health")
-    app.run(host='0.0.0.0', port=port, debug=False)
+        print(f"❌ Fatal error starting service: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
 
