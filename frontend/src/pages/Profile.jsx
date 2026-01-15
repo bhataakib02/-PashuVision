@@ -12,6 +12,15 @@ export default function Profile() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768)
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   useEffect(() => {
     const token = localStorage.getItem('token')
@@ -69,48 +78,146 @@ export default function Profile() {
   return (
     <>
       <Header />
-      <div className="container">
-        <div className="card">
-          <h1>My Profile</h1>
-          {error && <div style={{ color: 'salmon', padding: '12px', marginBottom: '12px', backgroundColor: '#ffe6e6', borderRadius: '6px', border: '1px solid #ff9999' }}>{error}</div>}
-          {success && <div style={{ color: '#4CAF50', padding: '12px', marginBottom: '12px', backgroundColor: '#e8f5e9', borderRadius: '6px', border: '1px solid #81c784' }}>{success}</div>}
-          <div className="grid" style={{ gridTemplateColumns: '220px 1fr' }}>
-            <div className="stack">
+      <div className="container" style={{ padding: isMobile ? '60px 12px 20px' : '80px 20px 20px' }}>
+        <div className="card" style={{ padding: isMobile ? '16px' : '24px' }}>
+          <h1 style={{ fontSize: isMobile ? '24px' : '28px', marginBottom: '20px' }}>My Profile</h1>
+          {error && <div style={{ color: 'salmon', padding: '12px', marginBottom: '12px', backgroundColor: '#ffe6e6', borderRadius: '6px', border: '1px solid #ff9999', fontSize: isMobile ? '14px' : '13px' }}>{error}</div>}
+          {success && <div style={{ color: '#4CAF50', padding: '12px', marginBottom: '12px', backgroundColor: '#e8f5e9', borderRadius: '6px', border: '1px solid #81c784', fontSize: isMobile ? '14px' : '13px' }}>{success}</div>}
+          <div className="grid" style={{ 
+            gridTemplateColumns: isMobile ? '1fr' : '220px 1fr',
+            gap: isMobile ? '24px' : '32px',
+            alignItems: isMobile ? 'center' : 'flex-start'
+          }}>
+            <div className="stack" style={{ alignItems: 'center', width: '100%' }}>
               {profile?.photoUrl ? (
-                <img src={profile.photoUrl} alt="avatar" style={{ width: 200, height: 200, borderRadius: 12, objectFit: 'cover', border: '2px solid #ddd' }} />
+                <img src={profile.photoUrl} alt="avatar" style={{ 
+                  width: isMobile ? 150 : 200, 
+                  height: isMobile ? 150 : 200, 
+                  borderRadius: 12, 
+                  objectFit: 'cover', 
+                  border: '2px solid #ddd',
+                  margin: '0 auto'
+                }} />
               ) : (
-                <div style={{ width: 200, height: 200, borderRadius: 12, background: '#e0e0e0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '48px', color: '#999' }}>
+                <div style={{ 
+                  width: isMobile ? 150 : 200, 
+                  height: isMobile ? 150 : 200, 
+                  borderRadius: 12, 
+                  background: '#e0e0e0', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  fontSize: isMobile ? '64px' : '48px', 
+                  color: '#999',
+                  margin: '0 auto'
+                }}>
                   👤
                 </div>
               )}
-              <label style={{ marginTop: '10px', fontSize: '14px', fontWeight: '500' }}>Profile Photo</label>
-              <input className="file" type="file" accept="image/*" onChange={e => setPhoto(e.target.files?.[0] || null)} />
-              {photo && <small style={{ color: '#666', fontSize: '12px', marginTop: '5px' }}>Selected: {photo.name}</small>}
+              <label style={{ marginTop: '10px', fontSize: isMobile ? '16px' : '14px', fontWeight: '500', textAlign: 'center', width: '100%' }}>Profile Photo</label>
+              <input 
+                className="file" 
+                type="file" 
+                accept="image/*" 
+                onChange={e => setPhoto(e.target.files?.[0] || null)}
+                style={{ 
+                  fontSize: isMobile ? '16px' : '14px',
+                  padding: isMobile ? '12px' : '8px',
+                  width: '100%',
+                  maxWidth: isMobile ? '100%' : '220px'
+                }}
+              />
+              {photo && <small style={{ color: '#666', fontSize: isMobile ? '14px' : '12px', marginTop: '5px', textAlign: 'center', wordBreak: 'break-word' }}>Selected: {photo.name}</small>}
             </div>
-            <div className="stack">
+            <div className="stack" style={{ width: '100%', gap: isMobile ? '16px' : '12px' }}>
               <div className="stack">
-                <label>Name *</label>
-                <input className="input" value={name} onChange={e => setName(e.target.value)} placeholder="Your full name" />
+                <label style={{ fontSize: isMobile ? '16px' : '14px', fontWeight: '500' }}>Name *</label>
+                <input 
+                  className="input" 
+                  value={name} 
+                  onChange={e => setName(e.target.value)} 
+                  placeholder="Your full name"
+                  style={{ 
+                    fontSize: isMobile ? '16px' : '14px',
+                    padding: isMobile ? '14px' : '10px',
+                    width: '100%'
+                  }}
+                />
               </div>
               <div className="stack">
-                <label>Email *</label>
-                <input className="input" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="your.email@example.com" disabled />
-                <small style={{ color: '#666', fontSize: '12px' }}>Email cannot be changed</small>
+                <label style={{ fontSize: isMobile ? '16px' : '14px', fontWeight: '500' }}>Email *</label>
+                <input 
+                  className="input" 
+                  type="email" 
+                  value={email} 
+                  onChange={e => setEmail(e.target.value)} 
+                  placeholder="your.email@example.com" 
+                  disabled
+                  style={{ 
+                    fontSize: isMobile ? '16px' : '14px',
+                    padding: isMobile ? '14px' : '10px',
+                    width: '100%'
+                  }}
+                />
+                <small style={{ color: '#666', fontSize: isMobile ? '14px' : '12px', wordBreak: 'break-word' }}>Email cannot be changed</small>
               </div>
               <div className="stack">
-                <label>Phone</label>
-                <input className="input" type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+91 98765 43210" />
+                <label style={{ fontSize: isMobile ? '16px' : '14px', fontWeight: '500' }}>Phone</label>
+                <input 
+                  className="input" 
+                  type="tel" 
+                  value={phone} 
+                  onChange={e => setPhone(e.target.value)} 
+                  placeholder="+91 98765 43210"
+                  style={{ 
+                    fontSize: isMobile ? '16px' : '14px',
+                    padding: isMobile ? '14px' : '10px',
+                    width: '100%'
+                  }}
+                />
               </div>
               <div className="stack">
-                <label>Region</label>
-                <input className="input" value={region} onChange={e => setRegion(e.target.value)} placeholder="Your region or location" />
+                <label style={{ fontSize: isMobile ? '16px' : '14px', fontWeight: '500' }}>Region</label>
+                <input 
+                  className="input" 
+                  value={region} 
+                  onChange={e => setRegion(e.target.value)} 
+                  placeholder="Your region or location"
+                  style={{ 
+                    fontSize: isMobile ? '16px' : '14px',
+                    padding: isMobile ? '14px' : '10px',
+                    width: '100%'
+                  }}
+                />
               </div>
               <div className="stack">
-                <label>Language</label>
-                <input className="input" value={language} onChange={e => setLanguage(e.target.value)} placeholder="en" />
+                <label style={{ fontSize: isMobile ? '16px' : '14px', fontWeight: '500' }}>Language</label>
+                <input 
+                  className="input" 
+                  value={language} 
+                  onChange={e => setLanguage(e.target.value)} 
+                  placeholder="en"
+                  style={{ 
+                    fontSize: isMobile ? '16px' : '14px',
+                    padding: isMobile ? '14px' : '10px',
+                    width: '100%'
+                  }}
+                />
               </div>
-              <div>
-                <button className="btn" disabled={saving} onClick={onSave}>{saving ? 'Saving…' : 'Save Changes'}</button>
+              <div style={{ marginTop: isMobile ? '8px' : '4px' }}>
+                <button 
+                  className="btn" 
+                  disabled={saving} 
+                  onClick={onSave}
+                  style={{
+                    fontSize: isMobile ? '16px' : '14px',
+                    padding: isMobile ? '14px 24px' : '10px 20px',
+                    minHeight: isMobile ? '48px' : '40px',
+                    width: isMobile ? '100%' : 'auto'
+                  }}
+                >
+                  {saving ? 'Saving…' : 'Save Changes'}
+                </button>
               </div>
             </div>
           </div>

@@ -121,6 +121,76 @@ h2 { margin: 16px 0 8px; font-size: 20px; color: var(--color-muted); }
   
   .container {
     padding-top: 70px;
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  
+  /* Mobile-friendly inputs */
+  .input, .select, .textarea, .file {
+    font-size: 16px !important; /* Prevents zoom on iOS */
+    padding: 14px 12px !important;
+    min-height: 48px; /* Touch-friendly */
+  }
+  
+  /* Mobile-friendly buttons */
+  .btn {
+    font-size: 16px !important;
+    padding: 14px 20px !important;
+    min-height: 48px; /* Touch-friendly */
+    width: 100%;
+    max-width: 100%;
+  }
+  
+  /* Mobile-friendly cards */
+  .card {
+    padding: 16px !important;
+    margin-bottom: 12px;
+  }
+  
+  /* Mobile-friendly headings */
+  h1 { font-size: 24px !important; }
+  h2 { font-size: 20px !important; }
+  h3 { font-size: 18px !important; }
+  
+  /* Stack rows on mobile */
+  .row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  
+  /* Grid adjustments */
+  .grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px;
+  }
+  
+  /* Override inline grid styles for mobile */
+  [style*="gridTemplateColumns"] {
+    grid-template-columns: 1fr !important;
+  }
+  
+  [style*="repeat(auto-fit"] {
+    grid-template-columns: 1fr !important;
+  }
+  
+  /* Tables - make scrollable */
+  table {
+    font-size: 12px;
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Labels */
+  label {
+    font-size: 16px !important;
+    margin-bottom: 8px;
+  }
+  
+  /* Small text */
+  small {
+    font-size: 14px !important;
   }
 }
 
@@ -136,6 +206,26 @@ h2 { margin: 16px 0 8px; font-size: 20px; color: var(--color-muted); }
   
   .container {
     padding-top: 60px;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  
+  .card {
+    padding: 12px !important;
+  }
+  
+  h1 { font-size: 22px !important; }
+  h2 { font-size: 18px !important; }
+  h3 { font-size: 16px !important; }
+  
+  .btn {
+    font-size: 15px !important;
+    padding: 12px 16px !important;
+  }
+  
+  .input, .select, .textarea, .file {
+    font-size: 16px !important;
+    padding: 12px 10px !important;
   }
 }
 

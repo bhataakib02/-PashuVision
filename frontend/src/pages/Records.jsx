@@ -12,6 +12,15 @@ export default function Records() {
   const [q, setQ] = useState('')
   const [breed, setBreed] = useState('')
   const [loc, setLoc] = useState('')
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768)
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   // Helper function to format age
   const formatAge = (ageMonths) => {
@@ -124,17 +133,36 @@ export default function Records() {
         
         {loading && <LoadingSpinner message="Loading records..." />}
         <div className="card" style={{ marginBottom: 12 }}>
-          <div className="grid" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
-            <input className="input" placeholder="Search" value={q} onChange={e => setQ(e.target.value)} />
-            <input className="input" placeholder="Filter by breed" value={breed} onChange={e => setBreed(e.target.value)} />
-            <input className="input" placeholder="Filter by location" value={loc} onChange={e => setLoc(e.target.value)} />
+          <div className="grid" style={{ 
+            gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr',
+            gap: '10px'
+          }}>
+            <input className="input" placeholder="Search" value={q} onChange={e => setQ(e.target.value)} style={{ fontSize: isMobile ? '16px' : '14px', padding: isMobile ? '12px' : '8px' }} />
+            <input className="input" placeholder="Filter by breed" value={breed} onChange={e => setBreed(e.target.value)} style={{ fontSize: isMobile ? '16px' : '14px', padding: isMobile ? '12px' : '8px' }} />
+            <input className="input" placeholder="Filter by location" value={loc} onChange={e => setLoc(e.target.value)} style={{ fontSize: isMobile ? '16px' : '14px', padding: isMobile ? '12px' : '8px' }} />
           </div>
-          <div className="row" style={{ marginTop: 10 }}>
-            <button className="btn" onClick={exportCsv}>Export CSV</button>
+          <div className="row" style={{ marginTop: 10, flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
+            <button className="btn" onClick={exportCsv} style={{ 
+              fontSize: isMobile ? '14px' : '13px',
+              padding: isMobile ? '12px 16px' : '8px 12px',
+              minHeight: isMobile ? '44px' : '36px'
+            }}>Export CSV</button>
           </div>
         </div>
-        <div className="card">
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        
+        {/* Desktop Table View */}
+        {!isMobile && (
+          <div className="card" style={{ 
+            overflowX: 'auto',
+            WebkitOverflowScrolling: 'touch',
+            msOverflowStyle: '-ms-autohiding-scrollbar'
+          }}>
+            <table style={{ 
+              width: '100%', 
+              borderCollapse: 'collapse', 
+              minWidth: '800px',
+              fontSize: window.innerWidth <= 1024 ? '12px' : '14px'
+            }}>
             <thead>
               <tr style={{ background: 'var(--color-bg-secondary)' }}>
                 <th style={{ width: '60px', padding: '8px', textAlign: 'left', fontWeight: 'bold' }}>Sr No</th>
@@ -448,14 +476,14 @@ export default function Records() {
                     </span>
                   </td>
                   <td style={{ width: '250px', padding: '8px', textAlign: 'right' }}>
-                    <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', flexWrap: 'nowrap' }}>
+                    <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', flexWrap: window.innerWidth <= 1024 ? 'wrap' : 'nowrap' }}>
                       <button 
                         className="btn secondary" 
                         style={{ 
-                          fontSize: '13px', 
-                          padding: '8px 12px', 
-                          minWidth: '36px',
-                          height: '36px',
+                          fontSize: window.innerWidth <= 1024 ? '11px' : '13px', 
+                          padding: window.innerWidth <= 1024 ? '6px 8px' : '8px 12px', 
+                          minWidth: window.innerWidth <= 1024 ? '32px' : '36px',
+                          height: window.innerWidth <= 1024 ? '32px' : '36px',
                           borderRadius: '6px',
                           border: '2px solid #007bff',
                           background: '#ffffff',
@@ -1065,7 +1093,362 @@ export default function Records() {
             })}
             </tbody>
           </table>
-        </div>
+          </div>
+        )}
+        
+        {/* Mobile Card View */}
+        {isMobile && (
+          <div className="stack" style={{ gap: '12px' }}>
+            {filtered.map((it, index) => {
+              const user = JSON.parse(localStorage.getItem('user') || 'null')
+              const canModerate = user && user.role === 'admin'
+              const canEdit = user && (user.role === 'admin' || (user.role === 'user' && (it.createdBy === user.id || !it.createdBy)))
+              const token = localStorage.getItem('token')
+              
+              const act = async (path) => {
+                try {
+                  const r = await fetch(`/api/animals/${it.id}/${path}`, { 
+                    method: 'POST', 
+                    headers: { Authorization: `Bearer ${token}` } 
+                  })
+                  const data = await r.json().catch(() => ({}))
+                  if (!r.ok) throw new Error(data.error || `Action failed (${r.status})`)
+                  const updated = data.animal || data
+                  setItems(prev => prev.map(x => x.id === updated.id ? updated : x))
+                  alert(`✅ Record ${path === 'approve' ? 'approved' : 'rejected'} successfully`)
+                } catch (e) {
+                  alert(`❌ ${e.message || 'Action failed'}`)
+                }
+              }
+              
+              const deleteRecord = async () => {
+                if (!confirm('Are you sure you want to delete this record?')) return
+                try {
+                  const r = await fetch(`/api/animals/${it.id}`, { 
+                    method: 'DELETE', 
+                    headers: { Authorization: `Bearer ${token}` } 
+                  })
+                  const data = await r.json().catch(() => ({}))
+                  if (!r.ok) throw new Error(data.error || `Delete failed (${r.status})`)
+                  setItems(prev => prev.filter(x => x.id !== it.id))
+                  alert('✅ Record deleted successfully')
+                } catch (e) {
+                  alert(`❌ ${e.message || 'Delete failed'}`)
+                }
+              }
+              
+              return (
+                <div key={it.id} className="card" style={{ 
+                  padding: '16px',
+                  marginBottom: '12px',
+                  background: 'var(--glass-bg)',
+                  border: '1px solid var(--glass-border)'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                    <div>
+                      <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>#{index + 1}</div>
+                      <div style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '4px' }}>{it.ownerName || '—'}</div>
+                      <div style={{ fontSize: '12px', color: '#666' }}>
+                        {it.capturedAt ? new Date(it.capturedAt).toLocaleDateString() : '—'}
+                      </div>
+                    </div>
+                    <span style={{
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      backgroundColor: it.status === 'approved' ? '#4CAF50' : 
+                                      it.status === 'rejected' ? '#F44336' : '#FF9800',
+                      color: 'white',
+                      fontSize: '10px',
+                      fontWeight: 'bold'
+                    }}>
+                      {it.status?.toUpperCase() || 'PENDING'}
+                    </span>
+                  </div>
+                  
+                  <div style={{ display: 'grid', gap: '8px', marginBottom: '12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '12px', color: '#666' }}>Breed:</span>
+                      <span style={{ fontSize: '14px', fontWeight: '500' }}>{it.predictedBreed || '—'}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '12px', color: '#666' }}>Location:</span>
+                      <span style={{ fontSize: '14px', fontWeight: '500' }}>{it.location || '—'}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '12px', color: '#666' }}>Age:</span>
+                      <span style={{ fontSize: '14px', fontWeight: '500' }}>{formatAge(it.ageMonths)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '12px', color: '#666' }}>Scanned By:</span>
+                      <span style={{ fontSize: '14px', fontWeight: '500' }}>
+                        {it.createdBy ? (getUserName(it) || `ID: ${it.createdBy.slice(0, 8)}`) : 'N/A'}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--color-border)' }}>
+                    <button 
+                      className="btn secondary" 
+                      onClick={() => {
+                        const formatHealthStatus = (status) => {
+                          if (!status) return 'Not specified'
+                          return status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ')
+                        }
+                        const formatVaccinationStatus = (status) => {
+                          if (!status) return 'Not specified'
+                          return status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ')
+                        }
+                        const detailsModal = window.open('', '_blank', 'width=700,height=700,scrollbars=yes,resizable=yes')
+                        detailsModal.document.write(`
+                          <html>
+                            <head>
+                              <title>Record Details - ${it.id}</title>
+                              <style>
+                                * { margin: 0; padding: 0; box-sizing: border-box; }
+                                body { 
+                                  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                                  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                  padding: 20px;
+                                  min-height: 100vh;
+                                }
+                                .modal-container {
+                                  max-width: 650px;
+                                  margin: 0 auto;
+                                  background: white;
+                                  border-radius: 16px;
+                                  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                                  overflow: hidden;
+                                }
+                                .modal-header {
+                                  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                  color: white;
+                                  padding: 24px 28px;
+                                  font-size: 24px;
+                                  font-weight: 600;
+                                  display: flex;
+                                  align-items: center;
+                                  justify-content: space-between;
+                                }
+                                .close-btn {
+                                  background: rgba(255,255,255,0.2);
+                                  border: none;
+                                  color: white;
+                                  width: 36px;
+                                  height: 36px;
+                                  border-radius: 50%;
+                                  cursor: pointer;
+                                  font-size: 20px;
+                                }
+                                .modal-body {
+                                  padding: 28px;
+                                  max-height: 500px;
+                                  overflow-y: auto;
+                                }
+                                .detail-row {
+                                  display: flex;
+                                  padding: 16px 0;
+                                  border-bottom: 1px solid #e9ecef;
+                                }
+                                .detail-label {
+                                  font-weight: 600;
+                                  color: #495057;
+                                  min-width: 160px;
+                                  font-size: 14px;
+                                }
+                                .detail-value {
+                                  color: #212529;
+                                  font-size: 15px;
+                                  flex: 1;
+                                }
+                              </style>
+                            </head>
+                            <body>
+                              <div class="modal-container">
+                                <div class="modal-header">
+                                  <h2>📋 Record Details</h2>
+                                  <button class="close-btn" onclick="window.close()">×</button>
+                                </div>
+                                <div class="modal-body">
+                                  <div class="detail-row">
+                                    <div class="detail-label">ID</div>
+                                    <div class="detail-value">${it.id}</div>
+                                  </div>
+                                  <div class="detail-row">
+                                    <div class="detail-label">Owner</div>
+                                    <div class="detail-value">${it.ownerName || 'N/A'}</div>
+                                  </div>
+                                  <div class="detail-row">
+                                    <div class="detail-label">Location</div>
+                                    <div class="detail-value">${it.location || 'N/A'}</div>
+                                  </div>
+                                  <div class="detail-row">
+                                    <div class="detail-label">Breed</div>
+                                    <div class="detail-value">${it.predictedBreed || 'Not predicted'}</div>
+                                  </div>
+                                  <div class="detail-row">
+                                    <div class="detail-label">Age</div>
+                                    <div class="detail-value">${formatAge(it.ageMonths)}</div>
+                                  </div>
+                                  <div class="detail-row">
+                                    <div class="detail-label">Status</div>
+                                    <div class="detail-value">${(it.status || 'pending').toUpperCase()}</div>
+                                  </div>
+                                </div>
+                              </div>
+                            </body>
+                          </html>
+                        `)
+                      }}
+                      style={{ 
+                        flex: 1,
+                        minWidth: '80px',
+                        fontSize: '12px',
+                        padding: '10px',
+                        minHeight: '40px'
+                      }}
+                    >
+                      👁️ View
+                    </button>
+                    {canModerate && it.status !== 'approved' && (
+                      <>
+                        <button 
+                          className="btn" 
+                          onClick={() => act('approve')}
+                          style={{ 
+                            flex: 1,
+                            minWidth: '80px',
+                            fontSize: '12px',
+                            padding: '10px',
+                            minHeight: '40px',
+                            background: '#28a745',
+                            color: 'white'
+                          }}
+                        >
+                          ✅ Approve
+                        </button>
+                        <button 
+                          className="btn" 
+                          onClick={() => act('reject')}
+                          style={{ 
+                            flex: 1,
+                            minWidth: '80px',
+                            fontSize: '12px',
+                            padding: '10px',
+                            minHeight: '40px',
+                            background: '#dc3545',
+                            color: 'white'
+                          }}
+                        >
+                          ❌ Reject
+                        </button>
+                      </>
+                    )}
+                    {canEdit && (
+                      <>
+                        <button 
+                          className="btn" 
+                          onClick={() => {
+                            const user = JSON.parse(localStorage.getItem('user') || '{}')
+                            const isAdmin = user && user.role === 'admin'
+                            const editModal = window.open('', '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes')
+                            editModal.document.write(`
+                              <html>
+                                <head>
+                                  <title>Edit Record - ${it.id}</title>
+                                  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                                  <style>
+                                    body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }
+                                    .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
+                                    .form-group { margin-bottom: 15px; }
+                                    label { display: block; margin-bottom: 5px; font-weight: bold; }
+                                    input, select, textarea { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+                                    .btn { padding: 10px 20px; margin: 5px; border: none; border-radius: 4px; cursor: pointer; }
+                                    .btn-primary { background: #007bff; color: white; }
+                                    .btn-secondary { background: #6c757d; color: white; }
+                                  </style>
+                                </head>
+                                <body>
+                                  <div class="container">
+                                    <h2>Edit Animal Record</h2>
+                                    <form id="editForm">
+                                      <div class="form-group">
+                                        <label>Owner Name: *</label>
+                                        <input type="text" id="ownerName" value="${it.ownerName || ''}" required>
+                                      </div>
+                                      <div class="form-group">
+                                        <label>Location: *</label>
+                                        <input type="text" id="location" value="${it.location || ''}" required>
+                                      </div>
+                                      <div class="form-group">
+                                        <button type="button" class="btn btn-primary" onclick="saveRecord()">Save Changes</button>
+                                        <button type="button" class="btn btn-secondary" onclick="window.close()">Cancel</button>
+                                      </div>
+                                    </form>
+                                  </div>
+                                  <script>
+                                    function saveRecord() {
+                                      const data = {
+                                        ownerName: document.getElementById('ownerName').value,
+                                        location: document.getElementById('location').value
+                                      };
+                                      fetch('/api/animals/${it.id}', {
+                                        method: 'PUT',
+                                        headers: {
+                                          'Content-Type': 'application/json',
+                                          'Authorization': 'Bearer ' + localStorage.getItem('token')
+                                        },
+                                        body: JSON.stringify(data)
+                                      })
+                                      .then(async response => {
+                                        if (!response.ok) throw new Error('Failed to update');
+                                        alert('✅ Record updated successfully!');
+                                        window.close();
+                                        window.opener.location.reload();
+                                      })
+                                      .catch(error => {
+                                        alert('❌ Error: ' + error.message);
+                                      });
+                                    }
+                                  </script>
+                                </body>
+                              </html>
+                            `)
+                          }}
+                          style={{ 
+                            flex: 1,
+                            minWidth: '80px',
+                            fontSize: '12px',
+                            padding: '10px',
+                            minHeight: '40px',
+                            background: '#fd7e14',
+                            color: 'white'
+                          }}
+                        >
+                          ✏️ Edit
+                        </button>
+                        <button 
+                          className="btn" 
+                          onClick={deleteRecord}
+                          style={{ 
+                            flex: 1,
+                            minWidth: '80px',
+                            fontSize: '12px',
+                            padding: '10px',
+                            minHeight: '40px',
+                            background: '#6c757d',
+                            color: 'white'
+                          }}
+                        >
+                          🗑️ Delete
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     </Layout>
   )
