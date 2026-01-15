@@ -269,10 +269,7 @@ class PyTorchPredictor {
       }
       
       // NO MOCK PREDICTIONS - Only use actual model
-      const hasExternalServiceUrl = process.env.PYTORCH_SERVICE_URL && 
-                                    !process.env.PYTORCH_SERVICE_URL.startsWith('http://localhost') &&
-                                    !process.env.PYTORCH_SERVICE_URL.startsWith('http://127.0.0.1');
-      
+      // Reuse hasExternalServiceUrl calculated above to avoid redeclaration errors
       if (hasExternalServiceUrl) {
         throw new Error(`No model available. Please configure PYTORCH_SERVICE_URL environment variable to point to your deployed Python service (current: ${this.pythonServiceUrl}).`);
       } else {
