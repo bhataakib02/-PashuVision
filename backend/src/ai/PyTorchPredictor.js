@@ -219,23 +219,40 @@ class PyTorchPredictor {
             return result;
           }
         } catch (error) {
-          console.error('⚠️  Python service prediction failed, retrying...', error.message);
+          // Check if error is about model loading - if so, predictViaPythonService already handled retries
+          const isModelLoading = error.message.includes('still loading') || 
+                                error.message.includes('not loaded') ||
+                                error.message.includes('Model is');
+          
+          if (isModelLoading) {
+            // predictViaPythonService already retried, re-throw the error
+            throw error;
+          }
+          
+          console.error('⚠️  Python service prediction failed:', error.message);
         }
         
         // Retry Python service check - maybe it just started
         if (!this.usePythonService) {
           await this.checkModelAvailability();
-      if (this.usePythonService) {
+          if (this.usePythonService) {
             try {
               const result = await this.predictViaPythonService(imageBuffer);
               if (result && result.length > 0 && result[0].breed !== 'Unknown') {
                 return result;
               }
             } catch (error) {
+              // Check if it's a model loading error - if so, re-throw
+              const isModelLoading = error.message.includes('still loading') || 
+                                    error.message.includes('not loaded') ||
+                                    error.message.includes('Model is');
+              if (isModelLoading) {
+                throw error;
+              }
               console.error('⚠️  Python service still unavailable', error.message);
             }
           }
-      }
+        }
       
         // If service unavailable, throw error instead of mock
         const hasExternalServiceUrl = process.env.PYTORCH_SERVICE_URL && 
@@ -339,9 +356,10 @@ class PyTorchPredictor {
               }
             }
             
-            // If we've exhausted retries or model loading status
+            // If we've exhausted retries but model is still loading
             if (isModelLoading) {
-              throw new Error(`Model is still loading after ${retryCount} retries. Please wait a moment and try again. The first request triggers model loading which takes 30-90 seconds.`);
+              // After all retries, throw a clear error that will be handled by the caller
+              throw new Error(`Model is still loading after ${retryCount} retries (${retryCount * 5}s wait). The first request triggers model loading which takes 30-90 seconds. Please wait and try again in 30 seconds.`);
             }
           } catch (e) {
             // If it's already our custom error, re-throw it

@@ -94,6 +94,10 @@ def load_model():
     global model, model_info
     
     script_dir = os.path.dirname(os.path.abspath(__file__))
+    # Ensure script_dir exists (should always be the case, but safety check)
+    if not os.path.exists(script_dir):
+        os.makedirs(script_dir, exist_ok=True)
+    
     pth_path = os.path.join(script_dir, 'best_model_convnext_base_acc0.7007.pth')
     model_info_path = os.path.join(script_dir, 'model_info.json')
     
@@ -154,10 +158,17 @@ def load_model():
             def download_with_validation(url, dest_path):
                 """Download file and validate it's complete"""
                 import tempfile
+                # Ensure destination directory exists
+                dest_dir = os.path.dirname(dest_path)
+                if dest_dir and not os.path.exists(dest_dir):
+                    os.makedirs(dest_dir, exist_ok=True)
+                
+                # Use same directory for temp file
                 temp_path = dest_path + '.tmp'
                 
                 try:
                     # Download to temp file first
+                    print(f"📥 Downloading to: {temp_path}", flush=True)
                     urllib.request.urlretrieve(url, temp_path)
                     
                     # Validate file size (should be > 50MB)
