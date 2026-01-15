@@ -650,17 +650,50 @@ app.put('/api/me', authMiddleware, upload.single('photo'), async (req, res) => {
     // if (language !== undefined) updates.language = language;
     updates.updated_at = new Date().toISOString();
     
-    // Handle profile photo upload
+    // Handle profile photo upload - try different column names
+    let photoUrl = null;
     if (req.file) {
-      const photoId = nanoid();
-      const ext = path.extname(req.file.originalname || '.jpg') || '.jpg';
-      const fileName = `profile_${req.user.sub}_${photoId}${ext}`;
-      const filePath = path.join(IMAGES_DIR, fileName);
-      fs.writeFileSync(filePath, req.file.buffer);
-      updates.photo_url = `/uploads/${fileName}`;
+      try {
+        // Ensure images directory exists
+        if (!fs.existsSync(IMAGES_DIR)) {
+          fs.mkdirSync(IMAGES_DIR, { recursive: true });
+        }
+        
+        const photoId = nanoid();
+        const ext = path.extname(req.file.originalname || '.jpg') || '.jpg';
+        const fileName = `profile_${req.user.sub}_${photoId}${ext}`;
+        const filePath = path.join(IMAGES_DIR, fileName);
+        fs.writeFileSync(filePath, req.file.buffer);
+        photoUrl = `/uploads/${fileName}`;
+        
+        // Try to update photo_url column (if it exists in database)
+        // If column doesn't exist, we'll catch the error and continue
+        updates.photo_url = photoUrl;
+      } catch (photoError) {
+        console.warn('⚠️  Error saving profile photo file:', photoError.message);
+        // Continue without photo update
+      }
     }
     
-    const updatedUser = await db.updateUser(req.user.sub, updates);
+    // Update user - handle photo_url column error gracefully
+    let updatedUser;
+    try {
+      updatedUser = await db.updateUser(req.user.sub, updates);
+    } catch (updateError) {
+      // If error is about photo_url column not existing, try again without it
+      if (updateError.message && updateError.message.includes('photo_url')) {
+        console.warn('⚠️  photo_url column not found, updating without photo');
+        const updatesWithoutPhoto = { ...updates };
+        delete updatesWithoutPhoto.photo_url;
+        updatedUser = await db.updateUser(req.user.sub, updatesWithoutPhoto);
+        // Store photo URL in response even if column doesn't exist
+        if (photoUrl) {
+          updatedUser.photo_url = photoUrl;
+        }
+      } else {
+        throw updateError;
+      }
+    }
     res.json({
       id: updatedUser.id,
       name: updatedUser.name,
@@ -669,7 +702,7 @@ app.put('/api/me', authMiddleware, upload.single('photo'), async (req, res) => {
       role: updatedUser.role,
       region: updatedUser.region || '',
       language: language || 'en',
-      photoUrl: updatedUser.photo_url || updatedUser.photoUrl || null
+      photoUrl: updatedUser.photo_url || updatedUser.photoUrl || photoUrl || null
     });
   } catch (e) {
     console.error('Error updating profile:', e);
@@ -794,8 +827,19 @@ app.post('/api/animals', authMiddleware, upload.array('images', 6), async (req, 
       species = '', speciesConfidence = '', species_confidence = '',
       ageMonths = '', age_months = '', gender = '', 
       gpsLat = '', gpsLng = '', capturedAt = '', earTag = '', ear_tag = '',
+      healthStatus = '', health_status = '', vaccinationStatus = '', vaccination_status = '',
+      weight = '', weight_kg = '',
       predictionData = null // Full prediction response from frontend
     } = req.body || {};
+    
+    // Debug: Log received health/vaccination data
+    console.log('📥 Received form data:', {
+      healthStatus: healthStatus || health_status,
+      vaccinationStatus: vaccinationStatus || vaccination_status,
+      weight: weight || weight_kg,
+      allBodyKeys: Object.keys(req.body || {})
+    });
+    
     const id = nanoid();
     const imageUrls = [];
     
@@ -845,6 +889,11 @@ app.post('/api/animals', authMiddleware, upload.array('images', 6), async (req, 
       ageMonthsValue = Number(ageMonths || age_months);
     }
     
+    // Extract health and vaccination status - handle empty strings properly
+    const healthStatusValue = (healthStatus || health_status || '').trim() || 'healthy';
+    const vaccinationStatusValue = (vaccinationStatus || vaccination_status || '').trim() || 'unknown';
+    const weightValue = (weight || weight_kg || '').trim();
+    
     const animal = {
       id,
       created_at: new Date().toISOString(),
@@ -858,11 +907,23 @@ app.post('/api/animals', authMiddleware, upload.array('images', 6), async (req, 
       breed: predictedBreed || predicted_breed || '',
       age_months: ageMonthsValue,
       gender: gender || '',
+      health_status: healthStatusValue,
+      vaccination_status: vaccinationStatusValue,
+      weight: weightValue ? (isNaN(weightValue) ? null : Number(weightValue)) : null,
       image_urls: imageUrls,
       images: imageUrls,
       gps: (gpsLat && gpsLng) ? { lat: Number(gpsLat), lng: Number(gpsLng) } : null,
       captured_at: capturedAt || new Date().toISOString(),
     };
+    
+    // Log the animal data being saved for debugging
+    console.log('📋 Animal data being saved:', {
+      id: animal.id,
+      health_status: animal.health_status,
+      vaccination_status: animal.vaccination_status,
+      weight: animal.weight,
+      owner_name: animal.owner_name
+    });
     
     // Automatically save new breed if predicted and doesn't exist
     // Use ONLY model prediction data - no database lookups or defaults
@@ -962,11 +1023,31 @@ app.post('/api/animals', authMiddleware, upload.array('images', 6), async (req, 
     let savedAnimal;
     try {
       console.log('💾 Attempting to save animal to Supabase:', animal.id, 'Owner:', animal.owner_name);
+      console.log('💾 Health/Vaccination data:', {
+        health_status: animal.health_status,
+        vaccination_status: animal.vaccination_status,
+        weight: animal.weight
+      });
       savedAnimal = await db.createAnimal(animal);
       console.log('✅ Animal saved successfully to Supabase:', savedAnimal.id);
+      console.log('✅ Saved animal health/vaccination data:', {
+        health_status: savedAnimal.health_status,
+        vaccination_status: savedAnimal.vaccination_status,
+        weight: savedAnimal.weight
+      });
     } catch (dbError) {
       console.error('❌ Error saving animal to Supabase:', dbError);
       console.error('❌ Error details:', dbError.message, dbError.code, dbError.details);
+      console.error('❌ Error hint:', dbError.hint);
+      
+      // Check if error is about missing columns
+      if (dbError.message && (dbError.message.includes('column') || dbError.message.includes('does not exist'))) {
+        console.error('⚠️  Database column error detected. Please ensure these columns exist in Supabase:');
+        console.error('   - health_status (TEXT)');
+        console.error('   - vaccination_status (TEXT)');
+        console.error('   - weight (NUMERIC)');
+      }
+      
       throw dbError; // Supabase is the only database - no fallback
     }
     
@@ -988,6 +1069,9 @@ app.post('/api/animals', authMiddleware, upload.array('images', 6), async (req, 
       predictedBreed: savedAnimal.predicted_breed || savedAnimal.predictedBreed || savedAnimal.breed,
       ageMonths: savedAnimal.age_months || savedAnimal.ageMonths,
       gender: savedAnimal.gender,
+      healthStatus: savedAnimal.health_status || savedAnimal.healthStatus || 'healthy',
+      vaccinationStatus: savedAnimal.vaccination_status || savedAnimal.vaccinationStatus || 'unknown',
+      weight: savedAnimal.weight || null,
       imageUrls: savedAnimal.image_urls || savedAnimal.imageUrls || savedAnimal.images,
       gps: savedAnimal.gps,
       capturedAt: savedAnimal.captured_at || savedAnimal.capturedAt
@@ -1031,7 +1115,7 @@ app.post('/api/animals', authMiddleware, upload.array('images', 6), async (req, 
 // Update animal record
 app.put('/api/animals/:id', authMiddleware, async (req, res) => {
   try {
-    const { ownerName, owner_name, location, notes, predictedBreed, predicted_breed, ageMonths, age_months, gender, status } = req.body;
+    const { ownerName, owner_name, location, notes, predictedBreed, predicted_breed, ageMonths, age_months, gender, status, healthStatus, health_status, vaccinationStatus, vaccination_status, weight, weight_kg } = req.body;
     const animals = await getAnimals();
     const animal = animals.find(a => a.id === req.params.id);
     
@@ -1070,6 +1154,15 @@ app.put('/api/animals/:id', authMiddleware, async (req, res) => {
       if (ageMonths !== undefined || age_months !== undefined) updates.age_months = Number(ageMonths || age_months);
       if (gender !== undefined) updates.gender = gender;
       if (status !== undefined) updates.status = status;
+      if (healthStatus !== undefined || health_status !== undefined) {
+        updates.health_status = healthStatus || health_status;
+      }
+      if (vaccinationStatus !== undefined || vaccination_status !== undefined) {
+        updates.vaccination_status = vaccinationStatus || vaccination_status;
+      }
+      if (weight !== undefined || weight_kg !== undefined) {
+        updates.weight = weight || weight_kg || null;
+      }
     } else {
       // Regular users cannot update these fields - ignore them
       console.log(`⚠️  User ${user.sub} attempted to update restricted fields. Only owner_name and location allowed.`);
@@ -1099,6 +1192,9 @@ app.put('/api/animals/:id', authMiddleware, async (req, res) => {
         breed: updatedAnimal.breed || updatedAnimal.predicted_breed || updatedAnimal.predictedBreed || '',
         ageMonths: updatedAnimal.age_months || updatedAnimal.ageMonths || null,
         gender: updatedAnimal.gender || '',
+        healthStatus: updatedAnimal.health_status || updatedAnimal.healthStatus || 'healthy',
+        vaccinationStatus: updatedAnimal.vaccination_status || updatedAnimal.vaccinationStatus || 'unknown',
+        weight: updatedAnimal.weight || null,
         imageUrls: updatedAnimal.image_urls || updatedAnimal.imageUrls || updatedAnimal.images || [],
         gps: updatedAnimal.gps || null,
         capturedAt: updatedAnimal.captured_at || updatedAnimal.capturedAt || null
