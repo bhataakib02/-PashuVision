@@ -1195,12 +1195,22 @@ app.put('/api/animals/:id', authMiddleware, async (req, res) => {
     // Map updates to Supabase format
     const updates = {};
     
-    // All users (including regular users) can update owner_name and location
+    // All users (including regular users) can update owner_name, location, health status, vaccination status, and weight
     if (ownerName !== undefined || owner_name !== undefined) {
       updates.owner_name = ownerName || owner_name;
     }
     if (location !== undefined) {
       updates.location = location;
+    }
+    if (healthStatus !== undefined || health_status !== undefined) {
+      updates.health_status = (healthStatus || health_status || '').trim() || 'healthy';
+    }
+    if (vaccinationStatus !== undefined || vaccination_status !== undefined) {
+      updates.vaccination_status = (vaccinationStatus || vaccination_status || '').trim() || 'unknown';
+    }
+    if (weight !== undefined || weight_kg !== undefined) {
+      const weightValue = (weight || weight_kg || '').toString().trim();
+      updates.weight = weightValue ? (isNaN(weightValue) ? null : Number(weightValue)) : null;
     }
     
     // Only admins can update other fields
@@ -1213,18 +1223,6 @@ app.put('/api/animals/:id', authMiddleware, async (req, res) => {
       if (ageMonths !== undefined || age_months !== undefined) updates.age_months = Number(ageMonths || age_months);
       if (gender !== undefined) updates.gender = gender;
       if (status !== undefined) updates.status = status;
-      if (healthStatus !== undefined || health_status !== undefined) {
-        updates.health_status = healthStatus || health_status;
-      }
-      if (vaccinationStatus !== undefined || vaccination_status !== undefined) {
-        updates.vaccination_status = vaccinationStatus || vaccination_status;
-      }
-      if (weight !== undefined || weight_kg !== undefined) {
-        updates.weight = weight || weight_kg || null;
-      }
-    } else {
-      // Regular users cannot update these fields - ignore them
-      console.log(`⚠️  User ${user.sub} attempted to update restricted fields. Only owner_name and location allowed.`);
     }
     
     updates.updated_at = new Date().toISOString();

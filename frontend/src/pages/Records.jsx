@@ -270,6 +270,28 @@ export default function Records() {
                             <label>Location: *</label>
                             <input type="text" id="location" value="${it.location || ''}" required>
                           </div>
+                          <div class="form-group">
+                            <label>Weight (kg):</label>
+                            <input type="number" id="weight" value="${it.weight || ''}" min="0" step="0.1">
+                          </div>
+                          <div class="form-group">
+                            <label>Health Status:</label>
+                            <select id="healthStatus">
+                              <option value="healthy" ${(it.healthStatus || 'healthy') === 'healthy' ? 'selected' : ''}>Healthy</option>
+                              <option value="sick" ${it.healthStatus === 'sick' ? 'selected' : ''}>Sick</option>
+                              <option value="injured" ${it.healthStatus === 'injured' ? 'selected' : ''}>Injured</option>
+                              <option value="pregnant" ${it.healthStatus === 'pregnant' ? 'selected' : ''}>Pregnant</option>
+                            </select>
+                          </div>
+                          <div class="form-group">
+                            <label>Vaccination Status:</label>
+                            <select id="vaccinationStatus">
+                              <option value="unknown" ${(it.vaccinationStatus || 'unknown') === 'unknown' ? 'selected' : ''}>Unknown</option>
+                              <option value="up_to_date" ${it.vaccinationStatus === 'up_to_date' ? 'selected' : ''}>Up to Date</option>
+                              <option value="due" ${it.vaccinationStatus === 'due' ? 'selected' : ''}>Due</option>
+                              <option value="overdue" ${it.vaccinationStatus === 'overdue' ? 'selected' : ''}>Overdue</option>
+                            </select>
+                          </div>
                           ${isAdmin ? `
                           <div class="form-group">
                             <label>Breed:</label>
@@ -278,6 +300,14 @@ export default function Records() {
                           <div class="form-group">
                             <label>Age (months):</label>
                             <input type="number" id="ageMonths" value="${it.ageMonths || ''}" min="1" max="600">
+                          </div>
+                          <div class="form-group">
+                            <label>Gender:</label>
+                            <select id="gender">
+                              <option value="">Select Gender</option>
+                              <option value="male" ${it.gender === 'male' ? 'selected' : ''}>Male</option>
+                              <option value="female" ${it.gender === 'female' ? 'selected' : ''}>Female</option>
+                            </select>
                           </div>
                           <div class="form-group">
                             <label>Status:</label>
@@ -296,6 +326,11 @@ export default function Records() {
                           <div class="form-group">
                             <label>Age (months):</label>
                             <input type="number" id="ageMonths" value="${it.ageMonths || ''}" class="readonly" readonly>
+                            <div class="info-text">Only admins can edit this field</div>
+                          </div>
+                          <div class="form-group">
+                            <label>Gender:</label>
+                            <input type="text" id="gender" value="${it.gender ? (it.gender.charAt(0).toUpperCase() + it.gender.slice(1)) : 'Not specified'}" class="readonly" readonly>
                             <div class="info-text">Only admins can edit this field</div>
                           </div>
                           <div class="form-group">
@@ -319,10 +354,26 @@ export default function Records() {
                             location: document.getElementById('location').value
                           };
                           
+                          // All users (admin and regular) can update health status, vaccination status, and weight
+                          const weightInput = document.getElementById('weight');
+                          const healthStatusInput = document.getElementById('healthStatus');
+                          const vaccinationStatusInput = document.getElementById('vaccinationStatus');
+                          
+                          if (weightInput && weightInput.value) {
+                            data.weight = parseFloat(weightInput.value) || null;
+                          }
+                          if (healthStatusInput && healthStatusInput.value) {
+                            data.healthStatus = healthStatusInput.value;
+                          }
+                          if (vaccinationStatusInput && vaccinationStatusInput.value) {
+                            data.vaccinationStatus = vaccinationStatusInput.value;
+                          }
+                          
                           // Only admins can update other fields
                           if (isAdmin) {
                             const breedInput = document.getElementById('breed');
                             const ageInput = document.getElementById('ageMonths');
+                            const genderInput = document.getElementById('gender');
                             const statusInput = document.getElementById('status');
                             
                             if (breedInput && !breedInput.readOnly) {
@@ -330,6 +381,9 @@ export default function Records() {
                             }
                             if (ageInput && !ageInput.readOnly && ageInput.value) {
                               data.ageMonths = parseInt(ageInput.value);
+                            }
+                            if (genderInput && !genderInput.readOnly && genderInput.value) {
+                              data.gender = genderInput.value;
                             }
                             if (statusInput && !statusInput.readOnly) {
                               data.status = statusInput.value;
