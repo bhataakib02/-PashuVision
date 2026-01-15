@@ -10,6 +10,7 @@ export default function Profile() {
   const [language, setLanguage] = useState('')
   const [photo, setPhoto] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
@@ -24,7 +25,12 @@ export default function Profile() {
 
   useEffect(() => {
     const token = localStorage.getItem('token')
-    if (!token) return
+    if (!token) {
+      setError('Login required')
+      setLoading(false)
+      return
+    }
+    setLoading(true)
     fetch('/api/me', { headers: { Authorization: `Bearer ${token}` } })
       .then(async r => {
         if (!r.ok) throw new Error((await r.json()).error || 'Failed')
@@ -37,8 +43,13 @@ export default function Profile() {
         setPhone(p.phone || '')
         setRegion(p.region || '')
         setLanguage(p.language || '')
+        setError('')
       })
-      .catch(e => setError(e.message || 'Error'))
+      .catch(e => {
+        setError(e.message || 'Error loading profile')
+        console.error('Profile load error:', e)
+      })
+      .finally(() => setLoading(false))
   }, [])
 
   const onSave = async () => {
@@ -75,6 +86,20 @@ export default function Profile() {
     }
   }
 
+  if (loading) {
+    return (
+      <>
+        <Header />
+        <div className="container" style={{ padding: isMobile ? '60px 12px 20px' : '80px 20px 20px' }}>
+          <div className="card" style={{ padding: isMobile ? '16px' : '24px', textAlign: 'center' }}>
+            <div style={{ fontSize: '24px', marginBottom: '12px' }}>⏳</div>
+            <div style={{ fontSize: isMobile ? '16px' : '14px', color: '#666' }}>Loading profile...</div>
+          </div>
+        </div>
+      </>
+    )
+  }
+
   return (
     <>
       <Header />
@@ -90,30 +115,39 @@ export default function Profile() {
           }}>
             <div className="stack" style={{ alignItems: 'center', width: '100%' }}>
               {profile?.photoUrl ? (
-                <img src={profile.photoUrl} alt="avatar" style={{ 
-                  width: isMobile ? 150 : 200, 
-                  height: isMobile ? 150 : 200, 
-                  borderRadius: 12, 
-                  objectFit: 'cover', 
-                  border: '2px solid #ddd',
-                  margin: '0 auto'
-                }} />
-              ) : (
-                <div style={{ 
-                  width: isMobile ? 150 : 200, 
-                  height: isMobile ? 150 : 200, 
-                  borderRadius: 12, 
-                  background: '#e0e0e0', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'center', 
-                  fontSize: isMobile ? '64px' : '48px', 
-                  color: '#999',
-                  margin: '0 auto'
-                }}>
-                  👤
-                </div>
-              )}
+                <img 
+                  src={profile.photoUrl} 
+                  alt="avatar" 
+                  onError={(e) => {
+                    e.target.style.display = 'none'
+                    const placeholder = e.target.nextElementSibling
+                    if (placeholder) placeholder.style.display = 'flex'
+                  }}
+                  style={{ 
+                    width: isMobile ? 150 : 200, 
+                    height: isMobile ? 150 : 200, 
+                    borderRadius: 12, 
+                    objectFit: 'cover', 
+                    border: '2px solid #ddd',
+                    margin: '0 auto',
+                    display: 'block'
+                  }} 
+                />
+              ) : null}
+              <div style={{ 
+                width: isMobile ? 150 : 200, 
+                height: isMobile ? 150 : 200, 
+                borderRadius: 12, 
+                background: '#e0e0e0', 
+                display: profile?.photoUrl ? 'none' : 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                fontSize: isMobile ? '64px' : '48px', 
+                color: '#999',
+                margin: '0 auto'
+              }}>
+                👤
+              </div>
               <label style={{ marginTop: '10px', fontSize: isMobile ? '16px' : '14px', fontWeight: '500', textAlign: 'center', width: '100%' }}>Profile Photo</label>
               <input 
                 className="file" 
