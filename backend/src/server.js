@@ -107,7 +107,8 @@ const upload = multer({ storage: multer.memoryStorage() });
 // Database functions - Supabase ONLY (no JSON fallback)
 async function getUsers() { 
   if (!db) {
-    throw new Error('Database service not initialized. Please check Supabase credentials.');
+    console.error('❌ getUsers() called but database service not initialized');
+    throw new Error('Database service not initialized. Please check Supabase credentials in Vercel environment variables.');
   }
   return await db.getUsers();
 }
@@ -512,6 +513,15 @@ app.post('/api/auth/register', async (req, res) => {
 
 app.post('/api/auth/login', async (req, res) => {
   try {
+    // Check if database is initialized
+    if (!db) {
+      console.error('❌ Database service not initialized');
+      return res.status(500).json({ 
+        error: 'Database service not available',
+        details: 'The database connection failed to initialize. Please check your Supabase credentials in Vercel environment variables.'
+      });
+    }
+    
     const { email, password } = req.body || {};
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
@@ -530,27 +540,32 @@ app.post('/api/auth/login', async (req, res) => {
     }
     
     // Ensure user is synced to Supabase (non-blocking)
-    if (process.env.USE_SUPABASE === 'true') {
-      const supabaseUsers = await db.getUsers();
-      const existsInSupabase = supabaseUsers.some(u => u.id === user.id);
-      if (!existsInSupabase) {
-        // Sync user to Supabase
-        db.createUser({
-          id: user.id,
-          email: user.email,
-          password_hash: user.password_hash || user.passwordHash,
-          name: user.name,
-          role: user.role || 'user',
-          phone: user.phone || null,
-          is_active: user.is_active !== undefined ? user.is_active : (user.isActive !== undefined ? user.isActive : true),
-          permissions: user.permissions || [],
-          created_at: user.created_at || user.createdAt || new Date().toISOString(),
-          updated_at: user.updated_at || user.updatedAt || new Date().toISOString()
-        }).then(() => {
-          console.log('✅ Synced user to Supabase on login:', user.email);
-        }).catch(e => {
-          console.log('⚠️  Could not sync user to Supabase on login:', user.email, e.message);
-        });
+    if (process.env.USE_SUPABASE === 'true' && db) {
+      try {
+        const supabaseUsers = await db.getUsers();
+        const existsInSupabase = supabaseUsers.some(u => u.id === user.id);
+        if (!existsInSupabase) {
+          // Sync user to Supabase
+          db.createUser({
+            id: user.id,
+            email: user.email,
+            password_hash: user.password_hash || user.passwordHash,
+            name: user.name,
+            role: user.role || 'user',
+            phone: user.phone || null,
+            is_active: user.is_active !== undefined ? user.is_active : (user.isActive !== undefined ? user.isActive : true),
+            permissions: user.permissions || [],
+            created_at: user.created_at || user.createdAt || new Date().toISOString(),
+            updated_at: user.updated_at || user.updatedAt || new Date().toISOString()
+          }).then(() => {
+            console.log('✅ Synced user to Supabase on login:', user.email);
+          }).catch(e => {
+            console.log('⚠️  Could not sync user to Supabase on login:', user.email, e.message);
+          });
+        }
+      } catch (syncError) {
+        console.error('⚠️  Error syncing user to Supabase:', syncError.message);
+        // Don't fail login if sync fails
       }
     }
     
@@ -559,6 +574,7 @@ app.post('/api/auth/login', async (req, res) => {
     res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
   } catch (e) {
     console.error('Login error:', e);
+    console.error('Login error stack:', e.stack);
     res.status(500).json({ error: 'Internal error during login', details: e.message });
   }
 });

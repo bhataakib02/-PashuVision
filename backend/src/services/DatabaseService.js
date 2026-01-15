@@ -11,8 +11,18 @@ class DatabaseService {
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
     
+    // Log what we found (without exposing values)
+    console.log('🔍 DatabaseService initialization:');
+    console.log('  SUPABASE_URL:', supabaseUrl ? `✓ Set (${supabaseUrl.substring(0, 30)}...)` : '✗ Missing');
+    console.log('  SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? '✓ Set' : '✗ Missing');
+    console.log('  SUPABASE_ANON_KEY:', process.env.SUPABASE_ANON_KEY ? '✓ Set' : '✗ Missing');
+    console.log('  Using key type:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'SERVICE_ROLE' : (process.env.SUPABASE_ANON_KEY ? 'ANON' : 'NONE'));
+    
     if (!supabaseUrl || !supabaseKey) {
-      throw new Error('❌ Supabase credentials are required! Please set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_ANON_KEY) in your .env file.');
+      const missing = [];
+      if (!supabaseUrl) missing.push('SUPABASE_URL');
+      if (!supabaseKey) missing.push('SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ANON_KEY');
+      throw new Error(`❌ Supabase credentials are required! Missing: ${missing.join(', ')}. Please set these environment variables in Vercel project settings.`);
     }
     
     // Check which key is being used
@@ -23,7 +33,13 @@ class DatabaseService {
       console.warn('⚠️  Using ANON KEY - RLS policies will apply. Consider using SERVICE ROLE KEY for admin operations.');
     }
     
-    this.supabase = createClient(supabaseUrl, supabaseKey);
+    try {
+      this.supabase = createClient(supabaseUrl, supabaseKey);
+      console.log('✅ Supabase client created successfully');
+    } catch (clientError) {
+      console.error('❌ Error creating Supabase client:', clientError);
+      throw new Error(`Failed to create Supabase client: ${clientError.message}`);
+    }
   }
 
   // ==================== USERS ====================

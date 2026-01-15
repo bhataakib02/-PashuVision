@@ -31,10 +31,18 @@ process.chdir(backendPath);
 let app;
 try {
   console.log('📦 Loading server.js...');
+  console.log('🔍 Environment check before loading:');
+  console.log('  SUPABASE_URL:', process.env.SUPABASE_URL ? `✓ Set (${process.env.SUPABASE_URL.substring(0, 30)}...)` : '✗ Missing');
+  console.log('  SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? '✓ Set' : '✗ Missing');
+  console.log('  SUPABASE_ANON_KEY:', process.env.SUPABASE_ANON_KEY ? '✓ Set' : '✗ Missing');
+  console.log('  JWT_SECRET:', process.env.JWT_SECRET ? '✓ Set' : '✗ Missing');
+  
   app = require('../backend/src/server.js');
   console.log('✅ Server loaded successfully');
 } catch (error) {
   console.error('❌ Error loading server:', error);
+  console.error('❌ Error name:', error.name);
+  console.error('❌ Error message:', error.message);
   console.error('❌ Error stack:', error.stack);
   // Restore original directory
   process.chdir(originalCwd);
@@ -49,7 +57,9 @@ try {
       res.status(500).json({ 
         error: 'Server initialization failed', 
         message: error.message,
-        details: 'Check Vercel logs for more information'
+        errorName: error.name,
+        details: 'Check Vercel logs for more information. Ensure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set.',
+        path: req.path
       });
     };
     module.exports = errorApp;
@@ -59,10 +69,13 @@ try {
   errorApp.use(express.json());
   errorApp.all('*', (req, res) => {
     console.error('Server initialization failed:', error.message);
+    console.error('Request path:', req.path);
     res.status(500).json({ 
       error: 'Server initialization failed', 
       message: error.message,
-      details: 'Check Vercel logs for more information'
+      errorName: error.name,
+      details: 'Check Vercel logs for more information. Ensure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set.',
+      path: req.path
     });
   });
   // Export error app instead of throwing
