@@ -225,11 +225,13 @@ def load_model():
                     if file_size > max_model_size:
                         error_msg = f"Model file too large: {file_size / (1024*1024):.1f} MB (max {max_model_size / (1024*1024):.0f} MB for Railway free tier)"
                         print(f"❌ {error_msg}", flush=True)
-                        print("💡 Solutions:", flush=True)
-                        print("   1. Use a quantized/smaller model (<350MB)", flush=True)
-                        print("   2. Upgrade Railway plan (Hobby: $5/month, 1GB RAM)", flush=True)
-                        print("   3. Use model quantization: torch.quantization.quantize_dynamic()", flush=True)
-                        print("   4. Contact support for a smaller model file", flush=True)
+                        print("💡 PERMANENT SOLUTION:", flush=True)
+                        print("   1. Quantize model: python backend/models/quantize_model.py <model.pth>", flush=True)
+                        print("   2. Upload quantized model to GitHub releases", flush=True)
+                        print("   3. Set MODEL_DOWNLOAD_URL_QUANTIZED in Railway", flush=True)
+                        print("   4. Or upgrade Railway plan (Hobby: $5/month, 1GB RAM)", flush=True)
+                        print("", flush=True)
+                        print("   See PERMANENT_SOLUTION.md for detailed instructions", flush=True)
                         # Remove the oversized file
                         try:
                             os.remove(temp_path)
@@ -326,10 +328,18 @@ def load_model():
                 return False
             
             # CRITICAL: Check memory before loading large model
-            max_model_size = 400 * 1024 * 1024  # 400MB max
+            max_model_size = 350 * 1024 * 1024  # 350MB max (leaves ~150MB for system/PyTorch)
             if file_size > max_model_size:
                 print(f"❌ Model file too large: {file_size / (1024*1024):.1f} MB (max {max_model_size / (1024*1024):.0f} MB)", flush=True)
                 print("   This will cause Out of Memory errors on Railway free tier", flush=True)
+                print("", flush=True)
+                print("💡 PERMANENT SOLUTION:", flush=True)
+                print("   1. Quantize model: python backend/models/quantize_model.py <model.pth>", flush=True)
+                print("   2. Upload quantized model to GitHub releases", flush=True)
+                print("   3. Set MODEL_DOWNLOAD_URL_QUANTIZED in Railway", flush=True)
+                print("   4. Or upgrade Railway plan (Hobby: $5/month, 1GB RAM)", flush=True)
+                print("", flush=True)
+                print("   See PERMANENT_SOLUTION.md for detailed instructions", flush=True)
                 return False
             
             # Check available memory if possible
