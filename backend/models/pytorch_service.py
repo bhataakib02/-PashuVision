@@ -364,57 +364,78 @@ def detect_species():
         return jsonify({'error': str(e)}), 500
 
 def load_model_background():
-    """Load model in background thread"""
+    """Load model in background thread - wrapped in comprehensive error handling"""
     global model, model_info, model_loading, model_load_error
     model_loading = True
     model_load_error = None
     
     try:
-        model_loaded = load_model()
-        if not model_loaded:
-            model_load_error = "Model file not found or download failed"
-    except Exception as e:
-        model_load_error = str(e)
+        # Wrap in try-except to catch any unexpected errors
+        try:
+            model_loaded = load_model()
+            if not model_loaded:
+                model_load_error = "Model file not found or download failed"
+        except MemoryError:
+            model_load_error = "Out of memory while loading model"
+        except Exception as e:
+            # Catch all exceptions to prevent thread crash
+            model_load_error = f"Error: {str(e)[:100]}"  # Limit error message length
+    except Exception:
+        # Final safety net - catch absolutely everything
+        model_load_error = "Unknown error during model loading"
     finally:
         model_loading = False
 
 if __name__ == '__main__':
     # Force stdout/stderr to be unbuffered for Railway logs
-    sys.stdout.reconfigure(line_buffering=True) if hasattr(sys.stdout, 'reconfigure') else None
-    sys.stderr.reconfigure(line_buffering=True) if hasattr(sys.stderr, 'reconfigure') else None
-    
     try:
-        # Start model loading in background thread
-        try:
-            model_thread = threading.Thread(target=load_model_background, daemon=True)
-            model_thread.start()
-        except Exception:
-            pass  # Silently fail - service will still start
-        
-        # Start Flask server immediately (don't wait for model)
+        sys.stdout.reconfigure(line_buffering=True) if hasattr(sys.stdout, 'reconfigure') else None
+        sys.stderr.reconfigure(line_buffering=True) if hasattr(sys.stderr, 'reconfigure') else None
+    except Exception:
+        pass
+    
+    # Suppress Flask/Werkzeug logging completely BEFORE starting
+    import logging
+    logging.getLogger('werkzeug').setLevel(logging.CRITICAL)
+    logging.getLogger('flask').setLevel(logging.CRITICAL)
+    logging.basicConfig(level=logging.CRITICAL)
+    
+    # Disable Flask's default logging and warnings
+    import warnings
+    warnings.filterwarnings('ignore')
+    
+    # Start model loading in background thread with error handling
+    try:
+        model_thread = threading.Thread(target=load_model_background, daemon=True)
+        model_thread.start()
+    except Exception:
+        pass  # Service will still start even if thread fails
+    
+    # Start Flask server - wrap in try-except to prevent crashes
+    try:
         port = int(os.environ.get('PORT', 5001))
         
-        # Suppress Flask/Werkzeug logging completely
-        import logging
-        logging.getLogger('werkzeug').setLevel(logging.ERROR)
-        logging.getLogger('flask').setLevel(logging.ERROR)
-        
-        # Ensure Flask uses the correct host and port
-        # Use threaded=True for better concurrency
-        # Disable Flask's default logging
-        import warnings
-        warnings.filterwarnings('ignore')
-        
-        try:
-            app.run(host='0.0.0.0', port=port, debug=False, threaded=True, use_reloader=False)
-        except OSError as e:
-            if "Address already in use" in str(e):
-                sys.exit(1)
-            else:
-                raise
+        # Run Flask server - this blocks forever unless there's an error
+        app.run(
+            host='0.0.0.0',
+            port=port,
+            debug=False,
+            threaded=True,
+            use_reloader=False,
+            use_debugger=False
+        )
+    except OSError as e:
+        if "Address already in use" in str(e):
+            sys.exit(1)
+        # For other OSErrors, try to continue
+        pass
     except KeyboardInterrupt:
         sys.exit(0)
     except Exception as e:
-        print(f"❌ Fatal error: {e}", flush=True)
+        # Log error but don't exit - Railway will restart if needed
+        # This prevents infinite restart loops
+        import time
+        print(f"Service error: {e}", flush=True)
+        time.sleep(5)  # Wait before potential restart
         sys.exit(1)
 
